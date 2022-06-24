@@ -1,0 +1,11 @@
+version: "3"
+
+tasks:
+  default: task --list-all
+
+  gen-proto: cd api && buf generate
+
+  build:
+    cmds:
+      - go build -o server cmd/main.go
+      - strip server
