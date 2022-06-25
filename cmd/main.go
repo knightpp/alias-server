@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -12,14 +11,17 @@ import (
 )
 
 func main() {
-	flag.Parse()
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	log.Logger = log.Logger.Level(zerolog.TraceLevel)
+	logger := log.Logger
+	logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	logger = logger.Level(zerolog.TraceLevel)
+	log.Logger = logger
 
-	gameServer := server.New(log.Logger.With().Str("component", "server").Logger())
+	gameServer := server.New(logger)
 
-	r := gin.Default()
+	r := gin.New()
 	r.SetTrustedProxies(nil)
+	r.Use(middleware.ZerologLogger(logger))
+	r.Use(gin.Recovery())
 
 	log.Info().Msg("starting server")
 

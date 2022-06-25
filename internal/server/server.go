@@ -19,7 +19,7 @@ type Server struct {
 
 func New(log zerolog.Logger) *Server {
 	return &Server{
-		log:      log,
+		log:      log.With().Str("component", "server").Logger(),
 		upgrader: websocket.Upgrader{},
 		game:     game.New(log.With().Str("component", "game").Logger()),
 	}
