@@ -25,12 +25,16 @@ func New(log zerolog.Logger) *Server {
 	}
 }
 
+func (s *Server) Game() *game.Game {
+	return s.game
+}
+
 func (s *Server) CreateRoom(c *gin.Context) {
 	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 
 	log.Trace().Msg("CreateRoom")
 
-	var options data.CreateRoomOptions
+	var options data.CreateRoomRequest
 
 	err := c.BindJSON(&options)
 	if err != nil {
@@ -38,9 +42,9 @@ func (s *Server) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	id := uuid.New()
+	id := uuid.New().String()
 	room := data.Room{
-		ID:       id[:],
+		ID:       data.RoomID(id),
 		Name:     options.Name,
 		IsPublic: options.IsPublic,
 		Language: options.Language,
@@ -48,23 +52,28 @@ func (s *Server) CreateRoom(c *gin.Context) {
 		Teams:    []data.Team{},
 	}
 
-	err = s.game.AddRoom(room)
+	err = s.game.RegisterRoom(room)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "couldn't add new room: %s", err)
 		return
 	}
 
 	c.JSON(http.StatusOK, data.CreateRoomResponse{
-		ID: id[:],
+		ID: data.RoomID(id),
 	})
 }
 
 func (s *Server) JoinRoom(c *gin.Context) {
-	log := s.log.With().
-		Str("remote_ip", c.RemoteIP()).
-		Str("room_id", c.Param("id")).
-		Logger()
+	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 	log.Trace().Msg("JoinRoom")
+
+	var options data.JoinRoomRequest
+
+	err := c.BindJSON(&options)
+	if err != nil {
+		c.String(http.StatusBadRequest, "couldn't parse json: %s", err)
+		return
+	}
 
 	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -97,4 +106,29 @@ func (s *Server) ListRooms(c *gin.Context) {
 	rooms := s.game.ListRooms()
 
 	c.JSON(http.StatusOK, data.ListRoomsResponse{Rooms: rooms})
+}
+
+func (s *Server) UserLogin(c *gin.Context) {
+	log := s.log.With().Interface("remote_ip", c.RemoteIP()).Logger()
+	log.Trace().Msg("UserLogin")
+
+	var options data.UserSimpleLoginRequest
+
+	err := c.BindJSON(&options)
+	if err != nil {
+		c.String(http.StatusBadRequest, "invalid json: %s", err)
+		return
+	}
+
+	id := uuid.New().String()
+	player := data.Player{
+		ID:          data.PlayerID(id),
+		Name:        options.Name,
+		GravatarURL: "", // TODO: add gravatar
+	}
+	s.game.RegisterPlayer(player)
+
+	c.JSON(http.StatusOK, data.UserSimpleLoginResponse{
+		Player: player,
+	})
 }

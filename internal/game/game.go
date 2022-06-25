@@ -9,21 +9,27 @@ import (
 )
 
 type Game struct {
-	log        zerolog.Logger
+	log zerolog.Logger
+
 	rooms      map[string]data.Room
 	roomsMutex sync.Mutex
+
+	players      map[string]data.Player
+	playersMutex sync.Mutex
 }
 
 func New(log zerolog.Logger) *Game {
 	g := &Game{
-		log:        log,
-		rooms:      make(map[string]data.Room),
-		roomsMutex: sync.Mutex{},
+		log:          log,
+		rooms:        make(map[string]data.Room),
+		roomsMutex:   sync.Mutex{},
+		players:      make(map[string]data.Player),
+		playersMutex: sync.Mutex{},
 	}
 	return g
 }
 
-func (g *Game) AddRoom(room data.Room) error {
+func (g *Game) RegisterRoom(room data.Room) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
@@ -44,12 +50,49 @@ func (g *Game) ListRooms() []data.Room {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
-	rooms := make([]data.Room, len(g.rooms))
+	rooms := make([]data.Room, 0, len(g.rooms))
 	for _, room := range g.rooms {
 		rooms = append(rooms, room)
 	}
 
 	return rooms
+}
+
+func (g *Game) RegisterPlayer(player data.Player) {
+	g.playersMutex.Lock()
+	defer g.playersMutex.Unlock()
+
+	g.players[string(player.ID)] = player
+}
+
+func (g *Game) AddPlayerToRoom(playerID data.PlayerID, roomID data.RoomID) error {
+	g.roomsMutex.Lock()
+	defer g.roomsMutex.Unlock()
+
+	g.playersMutex.Lock()
+	defer g.playersMutex.Unlock()
+
+	room, ok := g.rooms[string(roomID)]
+	if !ok {
+		return fmt.Errorf("no such room")
+	}
+
+	player, ok := g.players[string(playerID)]
+	if !ok {
+		return fmt.Errorf("no such player")
+	}
+
+	room.Lobby = append(room.Lobby, player)
+
+	return nil
+}
+
+func (g *Game) IsPlayerExists(playerID data.PlayerID) bool {
+	g.playersMutex.Lock()
+	defer g.playersMutex.Unlock()
+
+	_, ok := g.players[string(playerID)]
+	return ok
 }
 
 func (g *Game) removeRoom(id []byte) {
