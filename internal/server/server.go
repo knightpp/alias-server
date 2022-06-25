@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/knightpp/alias-server/internal/gravatar"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -124,7 +125,7 @@ func (s *Server) UserLogin(c *gin.Context) {
 	player := data.Player{
 		ID:          data.PlayerID(id),
 		Name:        options.Name,
-		GravatarURL: "", // TODO: add gravatar
+		GravatarURL: gravatar.GetURL(*options.Email),
 	}
 	s.game.RegisterPlayer(player)
 
