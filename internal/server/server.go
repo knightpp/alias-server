@@ -125,7 +125,7 @@ func (s *Server) UserLogin(c *gin.Context) {
 	player := data.Player{
 		ID:          data.PlayerID(id),
 		Name:        options.Name,
-		GravatarURL: gravatar.GetURL(*options.Email),
+		GravatarURL: gravatar.GetUrlOrDefault(options.Email),
 	}
 	s.game.RegisterPlayer(player)
 

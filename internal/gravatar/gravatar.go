@@ -5,7 +5,13 @@ import (
 	"strings"
 )
 
-func GetURL(email string) string {
-	r := md5.Sum([]byte(strings.TrimSpace(strings.ToLower(email))))
-	return string(r[:])
+func GetUrlOrDefault(email *string) string {
+	if email == nil {
+		return "https://www.gravatar.com/avatar/?d=wavatar"
+	}
+
+	r := md5.Sum([]byte(strings.TrimSpace(strings.ToLower(*email))))
+	imageURL := "https://www.gravatar.com/avatar/" + string(r[:]) + "?d=wavatar"
+
+	return imageURL
 }
