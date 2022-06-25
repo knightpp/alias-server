@@ -10,21 +10,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var addr = flag.String("addr", "localhost:8000", "http service address")
-
 func main() {
 	flag.Parse()
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	log.Logger = log.Logger.Level(zerolog.TraceLevel)
 
-	gameServer := server.New(log.Logger)
+	gameServer := server.New(log.Logger.With().Str("component", "server").Logger())
 
 	r := gin.Default()
+	r.SetTrustedProxies(nil)
+
 	log.Info().Msg("starting server")
 	r.GET("/room/join/:id", gameServer.JoinRoom)
 	r.GET("/rooms", gameServer.ListRooms)
+	r.POST("/room", gameServer.CreateRoom)
 
-	if err := r.Run(*addr); err != nil {
+	if err := r.Run(); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
 	}
 }

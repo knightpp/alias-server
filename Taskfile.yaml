@@ -7,5 +7,5 @@ tasks:
 
   build:
     cmds:
-      - go build -o server cmd/main.go
+      - go build -tags=nomsgpack -o server cmd/main.go
       - strip server
