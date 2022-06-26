@@ -12,7 +12,7 @@ func GetUrlOrDefault(email *string) string {
 	}
 
 	r := md5.Sum([]byte(strings.TrimSpace(strings.ToLower(*email))))
-	imageURL := "https://www.gravatar.com/avatar/" + fmt.Sprintf("%x", r) + "?d=wavatar"
+	imageURL := fmt.Sprintf("https://www.gravatar.com/avatar/%x?d=wavatar", r)
 
 	return imageURL
 }
