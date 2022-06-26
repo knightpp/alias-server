@@ -39,6 +39,7 @@ func ZerologLogger(log zerolog.Logger) gin.HandlerFunc {
 			Str("client_ip", c.ClientIP()).
 			Str("method", c.Request.Method).
 			Str("path", path).
+			Str("user_agent", c.Request.UserAgent()).
 			Int("body.size", c.Writer.Size()).
 			Msg("handling request")
 	}
