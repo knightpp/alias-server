@@ -13,7 +13,7 @@ import (
 
 func main() {
 	logger := log.Logger
-	logger = logger.Output(OutputSwitcher())
+	logger = logger.Output(selectLogOutput())
 	logger = logger.Level(zerolog.TraceLevel)
 	log.Logger = logger
 
@@ -39,9 +39,9 @@ func main() {
 	}
 }
 
-func OutputSwitcher() io.Writer {
-	if _, err := os.Stat("/.dockerenv"); err != nil {
-		return zerolog.ConsoleWriter{Out: os.Stderr}
+func selectLogOutput() io.Writer {
+	if os.Getenv("GIN_MODE") == "release" {
+		return os.Stderr
 	}
-	return os.Stderr
+	return zerolog.ConsoleWriter{Out: os.Stderr}
 }
