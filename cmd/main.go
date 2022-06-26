@@ -12,7 +12,7 @@ import (
 
 func main() {
 	logger := log.Logger
-	logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	logger = logger.Output(os.Stderr)
 	logger = logger.Level(zerolog.TraceLevel)
 	log.Logger = logger
 
