@@ -4,38 +4,38 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/knightpp/alias-server/internal/data"
+	"github.com/knightpp/alias-server/internal/model"
 	"github.com/rs/zerolog"
 )
 
 type Game struct {
 	log zerolog.Logger
 
-	rooms      map[string]data.Room
+	rooms      map[string]model.Room
 	roomsMutex sync.Mutex
 
-	players      map[string]data.Player
+	players      map[string]model.Player
 	playersMutex sync.Mutex
 }
 
 func New(log zerolog.Logger) *Game {
 	g := &Game{
 		log:          log,
-		rooms:        make(map[string]data.Room),
+		rooms:        make(map[string]model.Room),
 		roomsMutex:   sync.Mutex{},
-		players:      make(map[string]data.Player),
+		players:      make(map[string]model.Player),
 		playersMutex: sync.Mutex{},
 	}
 	return g
 }
 
-func (g *Game) RegisterRoom(room data.Room) error {
+func (g *Game) RegisterRoom(room model.Room) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
 	g.log.Debug().Interface("room", room).Msg("adding a new room")
 
-	id := string(room.ID)
+	id := string(room.Id)
 	_, exists := g.rooms[id]
 	if exists {
 		return fmt.Errorf("room with id=%s already exists", id)
@@ -46,11 +46,11 @@ func (g *Game) RegisterRoom(room data.Room) error {
 	return nil
 }
 
-func (g *Game) ListRooms() []data.Room {
+func (g *Game) ListRooms() []model.Room {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
-	rooms := make([]data.Room, 0, len(g.rooms))
+	rooms := make([]model.Room, 0, len(g.rooms))
 	for _, room := range g.rooms {
 		rooms = append(rooms, room)
 	}
@@ -58,14 +58,14 @@ func (g *Game) ListRooms() []data.Room {
 	return rooms
 }
 
-func (g *Game) RegisterPlayer(player data.Player) {
+func (g *Game) RegisterPlayer(player model.Player) {
 	g.playersMutex.Lock()
 	defer g.playersMutex.Unlock()
 
-	g.players[string(player.ID)] = player
+	g.players[player.Id] = player
 }
 
-func (g *Game) AddPlayerToRoom(playerID data.PlayerID, roomID data.RoomID) error {
+func (g *Game) AddPlayerToRoom(playerID string, roomID string) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
@@ -87,7 +87,7 @@ func (g *Game) AddPlayerToRoom(playerID data.PlayerID, roomID data.RoomID) error
 	return nil
 }
 
-func (g *Game) IsPlayerExists(playerID data.PlayerID) bool {
+func (g *Game) IsPlayerExists(playerID string) bool {
 	g.playersMutex.Lock()
 	defer g.playersMutex.Unlock()
 
