@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/knightpp/alias-server/internal/gravatar"
+	"github.com/knightpp/alias-server/internal/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,13 +24,19 @@ type Server struct {
 	log      zerolog.Logger
 	upgrader websocket.Upgrader
 	game     *game.Game
+	playerDB storage.PlayerDB
 }
 
-func New(log zerolog.Logger) *Server {
+func New(log zerolog.Logger, playerDB storage.PlayerDB) *Server {
+	gameLogger := log.With().Str("component", "game").Logger()
+	serverLogger := log.With().Str("component", "server").Logger()
 	return &Server{
-		log:      log.With().Str("component", "server").Logger(),
-		upgrader: websocket.Upgrader{},
-		game:     game.New(log.With().Str("component", "game").Logger()),
+		log: serverLogger,
+		upgrader: websocket.Upgrader{
+			EnableCompression: true,
+		},
+		game:     game.New(gameLogger, playerDB),
+		playerDB: playerDB,
 	}
 }
 
@@ -78,13 +87,13 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Err(err).Msg("upgrade to websocket")
-		c.String(http.StatusInternalServerError, "couldn't upgrade connection")
+		// upgrader sends response for us
 		return
 	}
 
 	playerID := c.GetString(middleware.UserIDKey)
 
-	err = s.game.JoinRoom(sock, playerID)
+	err = s.game.JoinRoom(sock, playerID, options.RoomId)
 	if err != nil {
 		log.Err(err).Msg("join room failed")
 		c.String(http.StatusInternalServerError, "failed to join")
@@ -97,7 +106,7 @@ func (s *Server) ListRooms(c *gin.Context) {
 	log.Trace().Msg("ListRooms")
 
 	rooms := s.game.ListRooms()
-	roomsPb := fp.Map(rooms, func(r model.Room) *modelpb.Room { return r.ToProto() })
+	roomsPb := fp.Map(rooms, func(r *model.Room) *modelpb.Room { return r.ToProto() })
 
 	c.JSON(http.StatusOK, serverpb.ListRoomsResponse{Rooms: roomsPb})
 }
@@ -120,8 +129,16 @@ func (s *Server) UserLogin(c *gin.Context) {
 		Name:        options.Name,
 		GravatarUrl: gravatar.GetUrlOrDefault(options.Email),
 	}
-	player := model.NewPlayerFromPB(playerPb)
-	s.game.RegisterPlayer(player)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = s.playerDB.SetPlayer(ctx, playerPb)
+	if err != nil {
+		log.Err(err).Msg("failed to create a user")
+		c.String(http.StatusInternalServerError, "couldn't create a user")
+		return
+	}
 
 	c.JSON(http.StatusOK, serverpb.UserSimpleLoginResponse{
 		Player: playerPb,

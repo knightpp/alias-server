@@ -1,0 +1,17 @@
+version: "3"
+
+services:
+  redis:
+    image: docker.io/redis:7-alpine
+    volumes:
+      - "./cache/redis:/data:rw"
+  alias-server:
+    environment:
+      - "GIN_MODE=debug"
+      - "REDIS_ADDR=redis:6379"
+      - "PORT=8080"
+    depends_on:
+      - redis
+    build: .
+    ports:
+      - "8080:8080"

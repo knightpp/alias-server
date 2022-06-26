@@ -4,32 +4,32 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/model"
+	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/rs/zerolog"
 )
 
 type Game struct {
 	log zerolog.Logger
 
-	rooms      map[string]model.Room
+	rooms      map[string]*model.Room
 	roomsMutex sync.Mutex
 
-	players      map[string]model.Player
-	playersMutex sync.Mutex
+	playerDB storage.PlayerDB
 }
 
-func New(log zerolog.Logger) *Game {
+func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 	g := &Game{
-		log:          log,
-		rooms:        make(map[string]model.Room),
-		roomsMutex:   sync.Mutex{},
-		players:      make(map[string]model.Player),
-		playersMutex: sync.Mutex{},
+		log:        log,
+		rooms:      make(map[string]*model.Room),
+		roomsMutex: sync.Mutex{},
+		playerDB:   playerDB,
 	}
 	return g
 }
 
-func (g *Game) RegisterRoom(room model.Room) error {
+func (g *Game) RegisterRoom(room *model.Room) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
@@ -46,59 +46,17 @@ func (g *Game) RegisterRoom(room model.Room) error {
 	return nil
 }
 
-func (g *Game) ListRooms() []model.Room {
+func (g *Game) ListRooms() []*model.Room {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
-	rooms := make([]model.Room, 0, len(g.rooms))
-	for _, room := range g.rooms {
-		rooms = append(rooms, room)
-	}
-
-	return rooms
+	return fp.Values(g.rooms)
 }
 
-func (g *Game) RegisterPlayer(player model.Player) {
-	g.playersMutex.Lock()
-	defer g.playersMutex.Unlock()
-
-	g.players[player.Id] = player
-}
-
-func (g *Game) AddPlayerToRoom(playerID string, roomID string) error {
+func (g *Game) GetRoom(roomID string) (*model.Room, bool) {
 	g.roomsMutex.Lock()
-	defer g.roomsMutex.Unlock()
+	defer g.roomsMutex.Lock()
 
-	g.playersMutex.Lock()
-	defer g.playersMutex.Unlock()
-
-	room, ok := g.rooms[string(roomID)]
-	if !ok {
-		return fmt.Errorf("no such room")
-	}
-
-	player, ok := g.players[string(playerID)]
-	if !ok {
-		return fmt.Errorf("no such player")
-	}
-
-	room.Lobby = append(room.Lobby, player)
-
-	return nil
-}
-
-func (g *Game) IsPlayerExists(playerID string) bool {
-	g.playersMutex.Lock()
-	defer g.playersMutex.Unlock()
-
-	_, ok := g.players[string(playerID)]
-	return ok
-}
-
-func (g *Game) removeRoom(id []byte) {
-	g.roomsMutex.Lock()
-	defer g.roomsMutex.Unlock()
-
-	g.log.Debug().Str("id", string(id)).Msg("remove room by id")
-	delete(g.rooms, string(id))
+	room, ok := g.rooms[roomID]
+	return room, ok
 }
