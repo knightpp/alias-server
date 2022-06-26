@@ -1,0 +1,17 @@
+# Docs: https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  # TODO: enable this once deployment workflow is ready
+  #- package-ecosystem: "github-actions"
+  #  directory: "/"
+  #  schedule:
+  #    interval: "weekly"
+
