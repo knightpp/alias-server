@@ -2,6 +2,7 @@ package gravatar
 
 import (
 	"crypto/md5"
+	"fmt"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ func GetUrlOrDefault(email *string) string {
 	}
 
 	r := md5.Sum([]byte(strings.TrimSpace(strings.ToLower(*email))))
-	imageURL := "https://www.gravatar.com/avatar/" + string(r[:]) + "?d=wavatar"
+	imageURL := "https://www.gravatar.com/avatar/" + fmt.Sprintf("%x", r) + "?d=wavatar"
 
 	return imageURL
 }
