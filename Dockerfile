@@ -1,6 +1,7 @@
 FROM docker.io/golang:1.18-alpine as builder
 
 ENV CGO_ENABLED=0
+ENV GIN_MODE=release
 
 WORKDIR /src/alias-server
 
@@ -10,9 +11,8 @@ RUN go mod download
 
 COPY cmd cmd
 COPY internal internal
-COPY pkg pkg
 
-RUN go build -o /server ./cmd/main.go
+RUN go build -o /server -tags=nomsgpack ./cmd/main.go
 
 FROM scratch
 
