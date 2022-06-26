@@ -12,7 +12,7 @@ RUN go mod download
 COPY cmd cmd
 COPY internal internal
 
-RUN go build -o /server ./cmd/main.go -tags=nomsgpac
+RUN go build -o /server -tags=nomsgpac ./cmd/main.go
 
 FROM scratch
 
