@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 
 func main() {
 	logger := log.Logger
-	logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	logger = logger.Output(selectLogOutput())
 	logger = logger.Level(zerolog.TraceLevel)
 	log.Logger = logger
 
@@ -36,4 +37,11 @@ func main() {
 	if err := r.Run(); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
 	}
+}
+
+func selectLogOutput() io.Writer {
+	if os.Getenv("GIN_MODE") == "release" {
+		return os.Stderr
+	}
+	return zerolog.ConsoleWriter{Out: os.Stderr}
 }
