@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 
 func main() {
 	logger := log.Logger
-	logger = logger.Output(os.Stderr)
+	logger = logger.Output(OutputSwitcher())
 	logger = logger.Level(zerolog.TraceLevel)
 	log.Logger = logger
 
@@ -36,4 +37,11 @@ func main() {
 	if err := r.Run(); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
 	}
+}
+
+func OutputSwitcher() io.Writer {
+	if _, err := os.Stat("/.dockerenv"); err != nil {
+		return zerolog.ConsoleWriter{Out: os.Stderr}
+	}
+	return os.Stderr
 }
