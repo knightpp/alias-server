@@ -70,31 +70,25 @@ func (s *Server) JoinRoom(c *gin.Context) {
 
 	err := c.BindJSON(&options)
 	if err != nil {
-		c.String(http.StatusBadRequest, "couldn't parse json: %s", err)
+		log.Err(err).Msg("coudln't bind json")
+		c.String(http.StatusBadRequest, "couldn't parse json")
 		return
 	}
 
 	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Err(err).Msg("upgrade to websocket")
+		c.String(http.StatusInternalServerError, "couldn't upgrade connection")
 		return
 	}
 
-	defer sock.Close()
-	for {
-		mt, message, err := sock.ReadMessage()
-		if err != nil {
-			log.Err(err).Msg("websocket ReadMessage")
-			break
-		}
+	playerID := c.GetString(middleware.UserIDKey)
 
-		log.Debug().Bytes("message", message).Msg("received websocket message")
-
-		err = sock.WriteMessage(mt, message)
-		if err != nil {
-			log.Err(err).Msg("websocket WriteMessage")
-			break
-		}
+	err = s.game.JoinRoom(sock, playerID)
+	if err != nil {
+		log.Err(err).Msg("join room failed")
+		c.String(http.StatusInternalServerError, "failed to join")
+		return
 	}
 }
 
