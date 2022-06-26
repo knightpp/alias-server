@@ -58,7 +58,7 @@ func (s *Server) CreateRoom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, serverpb.CreateRoomResponse{
-		TeamId: room.Id,
+		RoomId: room.Id,
 	})
 }
 
