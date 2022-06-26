@@ -1,14 +1,19 @@
 package server
 
 import (
-	"github.com/knightpp/alias-server/internal/gravatar"
 	"net/http"
+
+	"github.com/knightpp/alias-server/internal/gravatar"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/knightpp/alias-server/internal/data"
+	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
+	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
+	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game"
+	"github.com/knightpp/alias-server/internal/middleware"
+	"github.com/knightpp/alias-server/internal/model"
 	"github.com/rs/zerolog"
 )
 
@@ -35,23 +40,16 @@ func (s *Server) CreateRoom(c *gin.Context) {
 
 	log.Trace().Msg("CreateRoom")
 
-	var options data.CreateRoomRequest
+	var createRequest serverpb.CreateRoomRequest
 
-	err := c.BindJSON(&options)
+	err := c.BindJSON(&createRequest)
 	if err != nil {
 		c.String(http.StatusBadRequest, "invalid json: %s", err)
 		return
 	}
 
-	id := uuid.New().String()
-	room := data.Room{
-		ID:       data.RoomID(id),
-		Name:     options.Name,
-		IsPublic: options.IsPublic,
-		Language: options.Language,
-		Lobby:    []data.Player{},
-		Teams:    []data.Team{},
-	}
+	creatorID := c.GetString(middleware.UserIDKey)
+	room := model.NewRoomFromRequest(&createRequest, creatorID)
 
 	err = s.game.RegisterRoom(room)
 	if err != nil {
@@ -59,8 +57,8 @@ func (s *Server) CreateRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, data.CreateRoomResponse{
-		ID: data.RoomID(id),
+	c.JSON(http.StatusOK, serverpb.CreateRoomResponse{
+		RoomId: room.Id,
 	})
 }
 
@@ -68,7 +66,7 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 	log.Trace().Msg("JoinRoom")
 
-	var options data.JoinRoomRequest
+	var options serverpb.JoinRoomRequest
 
 	err := c.BindJSON(&options)
 	if err != nil {
@@ -105,15 +103,16 @@ func (s *Server) ListRooms(c *gin.Context) {
 	log.Trace().Msg("ListRooms")
 
 	rooms := s.game.ListRooms()
+	roomsPb := fp.Map(rooms, func(r model.Room) *modelpb.Room { return r.ToProto() })
 
-	c.JSON(http.StatusOK, data.ListRoomsResponse{Rooms: rooms})
+	c.JSON(http.StatusOK, serverpb.ListRoomsResponse{Rooms: roomsPb})
 }
 
 func (s *Server) UserLogin(c *gin.Context) {
 	log := s.log.With().Interface("remote_ip", c.RemoteIP()).Logger()
 	log.Trace().Msg("UserLogin")
 
-	var options data.UserSimpleLoginRequest
+	var options serverpb.UserSimpleLoginRequest
 
 	err := c.BindJSON(&options)
 	if err != nil {
@@ -122,14 +121,15 @@ func (s *Server) UserLogin(c *gin.Context) {
 	}
 
 	id := uuid.New().String()
-	player := data.Player{
-		ID:          data.PlayerID(id),
+	playerPb := &modelpb.Player{
+		Id:          id,
 		Name:        options.Name,
-		GravatarURL: gravatar.GetUrlOrDefault(options.Email),
+		GravatarUrl: gravatar.GetUrlOrDefault(options.Email),
 	}
+	player := model.NewPlayerFromPB(playerPb)
 	s.game.RegisterPlayer(player)
 
-	c.JSON(http.StatusOK, data.UserSimpleLoginResponse{
-		Player: player,
+	c.JSON(http.StatusOK, serverpb.UserSimpleLoginResponse{
+		Player: playerPb,
 	})
 }
