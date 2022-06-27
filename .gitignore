@@ -1,4 +1,6 @@
-/server
-
+# IDEs
 /.vscode/
 /.idea/
+
+# Caches
+/cache/
