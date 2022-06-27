@@ -15,8 +15,8 @@ import (
 	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
 	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game"
+	"github.com/knightpp/alias-server/internal/game/actor"
 	"github.com/knightpp/alias-server/internal/middleware"
-	"github.com/knightpp/alias-server/internal/model"
 	"github.com/rs/zerolog"
 )
 
@@ -58,7 +58,7 @@ func (s *Server) CreateRoom(c *gin.Context) {
 	}
 
 	creatorID := c.GetString(middleware.UserIDKey)
-	room := model.NewRoomFromRequest(&createRequest, creatorID)
+	room := actor.NewRoomFromRequest(&createRequest, creatorID)
 
 	err = s.game.RegisterRoom(room)
 	if err != nil {
@@ -106,7 +106,7 @@ func (s *Server) ListRooms(c *gin.Context) {
 	log.Trace().Msg("ListRooms")
 
 	rooms := s.game.ListRooms()
-	roomsPb := fp.Map(rooms, func(r *model.Room) *modelpb.Room { return r.ToProto() })
+	roomsPb := fp.Map(rooms, func(r *actor.Room) *modelpb.Room { return r.ToProto() })
 
 	c.JSON(http.StatusOK, serverpb.ListRoomsResponse{Rooms: roomsPb})
 }

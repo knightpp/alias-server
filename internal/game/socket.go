@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
-	"github.com/knightpp/alias-server/internal/model"
+	"github.com/knightpp/alias-server/internal/game/actor"
 )
 
 func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
@@ -29,7 +29,7 @@ func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
 		return fmt.Errorf("get player from database: %w", err)
 	}
 
-	player := model.NewPlayerFromPB(playerPb, conn)
+	player := actor.NewPlayerFromPB(playerPb, conn)
 
 	err = room.AddPlayerToLobby(player)
 	if err != nil {

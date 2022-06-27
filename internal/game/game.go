@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/knightpp/alias-server/internal/fp"
-	"github.com/knightpp/alias-server/internal/model"
+	"github.com/knightpp/alias-server/internal/game/actor"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/rs/zerolog"
 )
@@ -13,7 +13,7 @@ import (
 type Game struct {
 	log zerolog.Logger
 
-	rooms      map[string]*model.Room
+	rooms      map[string]*actor.Room
 	roomsMutex sync.Mutex
 
 	playerDB storage.PlayerDB
@@ -22,14 +22,14 @@ type Game struct {
 func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 	g := &Game{
 		log:        log,
-		rooms:      make(map[string]*model.Room),
+		rooms:      make(map[string]*actor.Room),
 		roomsMutex: sync.Mutex{},
 		playerDB:   playerDB,
 	}
 	return g
 }
 
-func (g *Game) RegisterRoom(room *model.Room) error {
+func (g *Game) RegisterRoom(room *actor.Room) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
@@ -46,14 +46,14 @@ func (g *Game) RegisterRoom(room *model.Room) error {
 	return nil
 }
 
-func (g *Game) ListRooms() []*model.Room {
+func (g *Game) ListRooms() []*actor.Room {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 
 	return fp.Values(g.rooms)
 }
 
-func (g *Game) GetRoom(roomID string) (*model.Room, bool) {
+func (g *Game) GetRoom(roomID string) (*actor.Room, bool) {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Lock()
 

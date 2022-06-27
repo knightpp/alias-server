@@ -1,4 +1,4 @@
-package model
+package actor
 
 import (
 	"github.com/gorilla/websocket"
