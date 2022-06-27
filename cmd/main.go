@@ -30,8 +30,8 @@ func run(logger zerolog.Logger) error {
 		return fmt.Errorf("REDIS_ADDR must not be empty")
 	}
 
-	registrator := redis.New(redisAddr)
-	gameServer := server.New(logger, registrator)
+	playerDB := redis.New(redisAddr)
+	gameServer := server.New(logger, playerDB)
 
 	r := gin.New()
 	r.SetTrustedProxies(nil)
@@ -42,7 +42,7 @@ func run(logger zerolog.Logger) error {
 
 	r.POST("/user/login/simple", gameServer.UserLogin)
 	{
-		group := r.Group("/", middleware.Authorized(registrator))
+		group := r.Group("/", middleware.Authorized(playerDB))
 		group.GET("rooms", gameServer.ListRooms)
 		group.POST("room/join", gameServer.JoinRoom)
 		group.POST("room", gameServer.CreateRoom)

@@ -11,14 +11,17 @@ import (
 
 const UserIDKey = "user-id"
 
-func Authorized(reg storage.PlayerDB) gin.HandlerFunc {
+func Authorized(db storage.PlayerDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("auth")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		var err error
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-		_, err := reg.GetPlayer(ctx, auth)
+			_, err = db.GetPlayer(ctx, auth)
+		}()
 		if err != nil {
 			c.String(http.StatusForbidden, "you must authorize to access this resource")
 			c.Abort()
