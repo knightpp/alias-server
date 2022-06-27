@@ -29,7 +29,7 @@ func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 	return g
 }
 
-func (g *Game) RegisterRoom(room *actor.Room) error {
+func (g *Game) CreateRoom(room *actor.Room) error {
 	g.roomsMutex.Lock()
 	defer g.roomsMutex.Unlock()
 

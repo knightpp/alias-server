@@ -1,8 +1,12 @@
 package actor
 
 import (
+	"fmt"
+
 	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
+	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type Player struct {
@@ -30,11 +34,32 @@ func (p Player) ToProto() *modelpb.Player {
 	}
 }
 
-func (p Player) Conn() *websocket.Conn {
-	return p.conn
+func (p Player) RunLoop() error {
+	select {}
 }
 
 func (p Player) NotifyJoined(otherPlayer *modelpb.Player) error {
-	// TODO:
-	panic("TODO: send a message to websocket")
+	msg := &serverpb.PlayerJoinedMessage{}
+
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal proto: %w", err)
+	}
+
+	err = p.conn.WriteMessage(websocket.BinaryMessage, msgBytes)
+	return err
 }
+
+func (p Player) NotifyLeft(playerID string) error {
+	msg := &serverpb.PlayerLeftMessage{}
+
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal proto: %w", err)
+	}
+
+	err = p.conn.WriteMessage(websocket.BinaryMessage, msgBytes)
+	return err
+}
+
+func (p Player) send() {}
