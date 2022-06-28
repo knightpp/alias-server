@@ -4,6 +4,10 @@ tasks:
   default: task --list-all
 
   build:
+    env:
+      GOAMD64: v3
+      CGO_ENABLED: 0
+
     cmds:
-      - go build -tags=nomsgpack -o server cmd/server/main.go
+      - go build -tags=nomsgpack -o server ./cmd/server/main.go
       - strip server
