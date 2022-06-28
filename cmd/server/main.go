@@ -10,6 +10,7 @@ import (
 	"github.com/knightpp/alias-server/internal/server"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/redis"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -49,6 +50,7 @@ func run(logger zerolog.Logger) error {
 
 	log.Info().Msg("starting server")
 
+	r.Any("/metrics", gin.WrapH(promhttp.Handler()))
 	r.POST("/user/login/simple", gameServer.UserLogin)
 	{
 		group := r.Group("/", middleware.Authorized(playerDB))
