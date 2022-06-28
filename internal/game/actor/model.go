@@ -1,4 +1,4 @@
-package model
+package actor
 
 import (
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"

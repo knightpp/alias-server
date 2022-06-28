@@ -44,7 +44,7 @@ func run(logger zerolog.Logger) error {
 	{
 		group := r.Group("/", middleware.Authorized(playerDB))
 		group.GET("rooms", gameServer.ListRooms)
-		group.POST("room/join", gameServer.JoinRoom)
+		group.Any("room/join/:room_id", gameServer.JoinRoom)
 		group.POST("room", gameServer.CreateRoom)
 	}
 

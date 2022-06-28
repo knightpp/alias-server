@@ -5,38 +5,39 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/knightpp/alias-server/internal/gravatar"
-	"github.com/knightpp/alias-server/internal/storage"
-
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
+	custombindings "github.com/knightpp/alias-server/internal/binding"
 	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game"
+	"github.com/knightpp/alias-server/internal/game/actor"
+	"github.com/knightpp/alias-server/internal/gravatar"
 	"github.com/knightpp/alias-server/internal/middleware"
-	"github.com/knightpp/alias-server/internal/model"
+	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/rs/zerolog"
 )
 
 type Server struct {
-	log      zerolog.Logger
-	upgrader websocket.Upgrader
-	game     *game.Game
-	playerDB storage.PlayerDB
+	log       zerolog.Logger
+	upgrader  websocket.Upgrader
+	game      *game.Game
+	playerDB  storage.PlayerDB
+	protoBind binding.Binding
 }
 
 func New(log zerolog.Logger, playerDB storage.PlayerDB) *Server {
 	gameLogger := log.With().Str("component", "game").Logger()
 	serverLogger := log.With().Str("component", "server").Logger()
 	return &Server{
-		log: serverLogger,
-		upgrader: websocket.Upgrader{
-			EnableCompression: true,
-		},
-		game:     game.New(gameLogger, playerDB),
-		playerDB: playerDB,
+		log:       serverLogger,
+		upgrader:  websocket.Upgrader{EnableCompression: true},
+		game:      game.New(gameLogger, playerDB),
+		playerDB:  playerDB,
+		protoBind: custombindings.NewProtobuf(log),
 	}
 }
 
@@ -51,22 +52,22 @@ func (s *Server) CreateRoom(c *gin.Context) {
 
 	var createRequest serverpb.CreateRoomRequest
 
-	err := c.BindJSON(&createRequest)
+	err := c.MustBindWith(&createRequest, s.protoBind)
 	if err != nil {
 		c.String(http.StatusBadRequest, "invalid json: %s", err)
 		return
 	}
 
 	creatorID := c.GetString(middleware.UserIDKey)
-	room := model.NewRoomFromRequest(&createRequest, creatorID)
+	room := actor.NewRoomFromRequest(&createRequest, creatorID)
 
-	err = s.game.RegisterRoom(room)
+	err = s.game.CreateRoom(room)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "couldn't add new room: %s", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, serverpb.CreateRoomResponse{
+	c.ProtoBuf(http.StatusOK, &serverpb.CreateRoomResponse{
 		RoomId: room.Id,
 	})
 }
@@ -75,15 +76,6 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 	log.Trace().Msg("JoinRoom")
 
-	var options serverpb.JoinRoomRequest
-
-	err := c.BindJSON(&options)
-	if err != nil {
-		log.Err(err).Msg("coudln't bind json")
-		c.String(http.StatusBadRequest, "couldn't parse json")
-		return
-	}
-
 	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Err(err).Msg("upgrade to websocket")
@@ -91,14 +83,17 @@ func (s *Server) JoinRoom(c *gin.Context) {
 		return
 	}
 
+	roomID := c.Param("room_id")
 	playerID := c.GetString(middleware.UserIDKey)
 
-	err = s.game.JoinRoom(sock, playerID, options.RoomId)
+	err = s.game.JoinRoom(sock, playerID, roomID)
 	if err != nil {
 		log.Err(err).Msg("join room failed")
 		c.String(http.StatusInternalServerError, "failed to join")
 		return
 	}
+
+	c.Status(http.StatusOK)
 }
 
 func (s *Server) ListRooms(c *gin.Context) {
@@ -106,9 +101,9 @@ func (s *Server) ListRooms(c *gin.Context) {
 	log.Trace().Msg("ListRooms")
 
 	rooms := s.game.ListRooms()
-	roomsPb := fp.Map(rooms, func(r *model.Room) *modelpb.Room { return r.ToProto() })
+	roomsPb := fp.Map(rooms, func(r *actor.Room) *modelpb.Room { return r.ToProto() })
 
-	c.JSON(http.StatusOK, serverpb.ListRoomsResponse{Rooms: roomsPb})
+	c.ProtoBuf(http.StatusOK, &serverpb.ListRoomsResponse{Rooms: roomsPb})
 }
 
 func (s *Server) UserLogin(c *gin.Context) {
@@ -117,7 +112,7 @@ func (s *Server) UserLogin(c *gin.Context) {
 
 	var options serverpb.UserSimpleLoginRequest
 
-	err := c.BindJSON(&options)
+	err := c.MustBindWith(&options, s.protoBind)
 	if err != nil {
 		c.String(http.StatusBadRequest, "invalid json: %s", err)
 		return
@@ -140,7 +135,7 @@ func (s *Server) UserLogin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, serverpb.UserSimpleLoginResponse{
+	c.ProtoBuf(http.StatusOK, &serverpb.UserSimpleLoginResponse{
 		Player: playerPb,
 	})
 }

@@ -7,12 +7,13 @@ import (
 
 	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
-	"github.com/knightpp/alias-server/internal/model"
+	"github.com/knightpp/alias-server/internal/game/actor"
 )
 
 func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
 	defer conn.Close()
 	log := g.log
+	log.Trace().Str("player_id", playerID).Str("room_id", roomID).Msg("JoinRoom")
 
 	room, ok := g.GetRoom(roomID)
 	if !ok {
@@ -29,25 +30,18 @@ func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
 		return fmt.Errorf("get player from database: %w", err)
 	}
 
-	player := model.NewPlayerFromPB(playerPb, conn)
+	player := actor.NewPlayerFromPB(playerPb, conn)
 
 	err = room.AddPlayerToLobby(player)
 	if err != nil {
 		return fmt.Errorf("add player to lobby: %w", err)
 	}
 
-	for {
-		mt, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Err(err).Msg("websocket ReadMessage")
-			return fmt.Errorf("websocket read message: %w", err)
-		}
-
-		if mt != websocket.BinaryMessage {
-			log.Error().Msg("unxpected message type")
-			continue
-		}
-
-		log.Trace().Bytes("message", message).Msg("received websocket message")
+	err = player.NotifyLeft("Test uuid")
+	if err != nil {
+		return err
 	}
+
+	err = player.RunLoop()
+	return err
 }
