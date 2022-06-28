@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/knightpp/alias-server/internal/middleware"
 	"github.com/knightpp/alias-server/internal/server"
+	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/redis"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -25,12 +26,20 @@ func main() {
 }
 
 func run(logger zerolog.Logger) error {
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
+	var playerDB storage.PlayerDB
+	if url, ok := os.LookupEnv("REDIS_URL"); ok {
+		pdb, err := redis.NewFromURL(url)
+		if err != nil {
+			return err
+		}
+
+		playerDB = pdb
+	} else if addr, ok := os.LookupEnv("REDIS_ADDR"); ok {
+		playerDB = redis.New(addr)
+	} else {
 		return fmt.Errorf("REDIS_ADDR must not be empty")
 	}
 
-	playerDB := redis.New(redisAddr)
 	gameServer := server.New(logger, playerDB)
 
 	r := gin.New()

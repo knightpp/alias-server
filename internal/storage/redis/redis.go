@@ -26,6 +26,16 @@ func New(addr string) storage.PlayerDB {
 	}
 }
 
+func NewFromURL(url string) (storage.PlayerDB, error) {
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		return nil, fmt.Errorf("parse redis url: %w", err)
+	}
+
+	rdb := redis.NewClient(opts)
+	return &redisImpl{db: rdb}, nil
+}
+
 func (r *redisImpl) SetPlayer(ctx context.Context, p *modelpb.Player) error {
 	playerBytes, err := proto.Marshal(p)
 	if err != nil {

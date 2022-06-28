@@ -1,0 +1,13 @@
+# fly.toml file generated for alias-redis on 2022-06-28T16:25:58+03:00
+
+app = "alias-redis"
+
+[env]
+
+[experimental]
+allowed_public_ports = []
+auto_rollback = false
+
+[mount]
+destination = "/data"
+source = "redis_server"
