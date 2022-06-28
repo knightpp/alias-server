@@ -1,7 +1,10 @@
 FROM docker.io/golang:1.18-alpine as builder
 
-ENV CGO_ENABLED=0
 ENV GIN_MODE=release
+
+RUN go install github.com/go-task/task/v3/cmd/task@latest && \
+	go clean -modcache
+RUN apk add --no-cache 'binutils~=2'
 
 WORKDIR /src/alias-server
 
@@ -11,11 +14,12 @@ RUN go mod download
 
 COPY cmd cmd
 COPY internal internal
+COPY Taskfile.yaml .
 
-RUN go build -o /server -tags=nomsgpack ./cmd/server/main.go
+RUN task build
 
 FROM scratch
 
-COPY --from=builder /server /server
+COPY --from=builder /src/alias-server/server /server
 
 ENTRYPOINT [ "/server" ]
