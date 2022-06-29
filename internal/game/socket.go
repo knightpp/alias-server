@@ -11,7 +11,6 @@ import (
 )
 
 func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
-	defer conn.Close()
 	log := g.log
 	log.Trace().Str("player_id", playerID).Str("room_id", roomID).Msg("JoinRoom")
 
@@ -35,11 +34,6 @@ func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
 	err = room.AddPlayerToLobby(player)
 	if err != nil {
 		return fmt.Errorf("add player to lobby: %w", err)
-	}
-
-	err = player.NotifyLeft("Test uuid")
-	if err != nil {
-		return err
 	}
 
 	err = player.RunLoop()

@@ -67,6 +67,8 @@ func (s *Server) CreateRoom(c *gin.Context) {
 		return
 	}
 
+	roomsCreatedTotal.Inc()
+
 	c.ProtoBuf(http.StatusOK, &serverpb.CreateRoomResponse{
 		RoomId: room.Id,
 	})
@@ -83,17 +85,19 @@ func (s *Server) JoinRoom(c *gin.Context) {
 		return
 	}
 
+	defer sock.Close()
+	defer playersWebsocketCurrent.Dec()
+
 	roomID := c.Param("room_id")
 	playerID := c.GetString(middleware.UserIDKey)
 
+	playersWebsocketCurrent.Inc()
+	playersWebsocketTotal.Inc()
 	err = s.game.JoinRoom(sock, playerID, roomID)
 	if err != nil {
 		log.Err(err).Msg("join room failed")
-		c.String(http.StatusInternalServerError, "failed to join")
 		return
 	}
-
-	c.Status(http.StatusOK)
 }
 
 func (s *Server) ListRooms(c *gin.Context) {
