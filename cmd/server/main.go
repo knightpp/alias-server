@@ -50,7 +50,6 @@ func run(logger zerolog.Logger) error {
 
 	log.Info().Msg("starting server")
 
-	r.Any("/metrics", gin.WrapH(promhttp.Handler()))
 	r.POST("/user/login/simple", gameServer.UserLogin)
 	{
 		group := r.Group("/", middleware.Authorized(playerDB))
@@ -58,6 +57,15 @@ func run(logger zerolog.Logger) error {
 		group.Any("room/join/:room_id", gameServer.JoinRoom)
 		group.POST("room", gameServer.CreateRoom)
 	}
+
+	go func() {
+		metrics := gin.New()
+		metrics.Any("/metrics", gin.WrapH(promhttp.Handler()))
+		err := metrics.Run(":9091")
+		if err != nil {
+			logger.Err(err).Msg("running prometheus")
+		}
+	}()
 
 	if err := r.Run(); err != nil {
 		return fmt.Errorf("gin run: %w", err)
