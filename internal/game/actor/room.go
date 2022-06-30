@@ -8,6 +8,7 @@ import (
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
 	"github.com/knightpp/alias-server/internal/fp"
+	"github.com/rs/zerolog"
 )
 
 type Room struct {
@@ -21,6 +22,7 @@ type Room struct {
 
 	Password *string
 
+	log   zerolog.Logger
 	mutex sync.Mutex
 }
 
@@ -38,7 +40,8 @@ func NewRoomFromRequest(
 		Lobby:     map[string]Player{},
 		Teams:     map[string]Team{},
 		Password:  req.Password,
-		mutex:     sync.Mutex{},
+
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -46,6 +49,10 @@ func (r *Room) ToProto() *modelpb.Room {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
+	return r.toProtoUnsafe()
+}
+
+func (r *Room) toProtoUnsafe() *modelpb.Room {
 	return &modelpb.Room{
 		Id:        r.Id,
 		Name:      r.Name,
@@ -55,6 +62,14 @@ func (r *Room) ToProto() *modelpb.Room {
 		Lobby:     fp.Map(fp.Values(r.Lobby), func(p Player) *modelpb.Player { return p.ToProto() }),
 		Teams:     fp.Map(fp.Values(r.Teams), func(t Team) *modelpb.Team { return t.ToProto() }),
 	}
+}
+
+func (r *Room) SetLogger(log zerolog.Logger) {
+	r.log = log.With().
+		Str("component", "game.room").
+		Str("room.id", r.Id).
+		Str("room.name", r.Name).
+		Logger()
 }
 
 func (r *Room) AddPlayerToLobby(p Player) error {
@@ -69,13 +84,27 @@ func (r *Room) AddPlayerToLobby(p Player) error {
 	otherPlayers := fp.Values(r.Lobby)
 	r.Lobby[p.Id] = p
 
-	go func() {
-		// TODO: parallel
-		for _, p := range otherPlayers {
-			// TODO: log error
-			p.NotifyJoined(p.ToProto())
-		}
-	}()
+	err := p.conn.SendInitRoom(&serverpb.InitRoomMessage{
+		Room: r.toProtoUnsafe(),
+	})
+	if err != nil {
+		return fmt.Errorf("websocket send: %w", err)
+	}
+
+	if len(otherPlayers) > 0 {
+		go func() {
+			// TODO: parallel
+			for _, p := range otherPlayers {
+				// TODO: log error
+				err := p.conn.SendPlayerJoined(&serverpb.PlayerJoinedMessage{
+					Player: p.ToProto(),
+				})
+				if err != nil {
+					r.log.Err(err).Msg("NotifyJoined failed")
+				}
+			}
+		}()
+	}
 
 	return nil
 }

@@ -41,6 +41,7 @@ func (g *Game) CreateRoom(room *actor.Room) error {
 		return fmt.Errorf("room with id=%s already exists", id)
 	}
 
+	room.SetLogger(g.log)
 	g.rooms[id] = room
 
 	return nil
@@ -55,7 +56,7 @@ func (g *Game) ListRooms() []*actor.Room {
 
 func (g *Game) GetRoom(roomID string) (*actor.Room, bool) {
 	g.roomsMutex.Lock()
-	defer g.roomsMutex.Lock()
+	defer g.roomsMutex.Unlock()
 
 	room, ok := g.rooms[roomID]
 	return room, ok

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	"github.com/knightpp/alias-server/internal/game/actor"
+	"github.com/knightpp/alias-server/internal/ws"
 )
 
-func (g *Game) JoinRoom(conn *websocket.Conn, playerID, roomID string) error {
+func (g *Game) JoinRoom(conn *ws.Conn, playerID, roomID string) error {
 	log := g.log
 	log.Trace().Str("player_id", playerID).Str("room_id", roomID).Msg("JoinRoom")
 

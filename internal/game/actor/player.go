@@ -1,12 +1,8 @@
 package actor
 
 import (
-	"fmt"
-
-	"github.com/gorilla/websocket"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
-	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
-	"google.golang.org/protobuf/proto"
+	"github.com/knightpp/alias-server/internal/ws"
 )
 
 type Player struct {
@@ -14,10 +10,10 @@ type Player struct {
 	Name        string
 	GravatarUrl string
 
-	conn *websocket.Conn
+	conn *ws.Conn
 }
 
-func NewPlayerFromPB(p *modelpb.Player, conn *websocket.Conn) Player {
+func NewPlayerFromPB(p *modelpb.Player, conn *ws.Conn) Player {
 	return Player{
 		Id:          p.Id,
 		Name:        p.Name,
@@ -37,29 +33,3 @@ func (p Player) ToProto() *modelpb.Player {
 func (p Player) RunLoop() error {
 	select {}
 }
-
-func (p Player) NotifyJoined(otherPlayer *modelpb.Player) error {
-	msg := &serverpb.PlayerJoinedMessage{}
-
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshal proto: %w", err)
-	}
-
-	err = p.conn.WriteMessage(websocket.BinaryMessage, msgBytes)
-	return err
-}
-
-func (p Player) NotifyLeft(playerID string) error {
-	msg := &serverpb.PlayerLeftMessage{}
-
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshal proto: %w", err)
-	}
-
-	err = p.conn.WriteMessage(websocket.BinaryMessage, msgBytes)
-	return err
-}
-
-func (p Player) send() {}
