@@ -18,6 +18,7 @@ import (
 	"github.com/knightpp/alias-server/internal/gravatar"
 	"github.com/knightpp/alias-server/internal/middleware"
 	"github.com/knightpp/alias-server/internal/storage"
+	"github.com/knightpp/alias-server/internal/ws"
 	"github.com/rs/zerolog"
 )
 
@@ -85,7 +86,9 @@ func (s *Server) JoinRoom(c *gin.Context) {
 		return
 	}
 
-	defer sock.Close()
+	conn := ws.Wrap(sock)
+
+	defer conn.Close()
 	defer playersWebsocketCurrent.Dec()
 
 	roomID := c.Param("room_id")
@@ -93,8 +96,12 @@ func (s *Server) JoinRoom(c *gin.Context) {
 
 	playersWebsocketCurrent.Inc()
 	playersWebsocketTotal.Inc()
-	err = s.game.JoinRoom(sock, playerID, roomID)
+
+	err = s.game.JoinRoom(conn, playerID, roomID)
 	if err != nil {
+		_ = conn.SendFatal(&serverpb.FatalMessage{
+			Error: err.Error(),
+		})
 		log.Err(err).Msg("join room failed")
 		return
 	}

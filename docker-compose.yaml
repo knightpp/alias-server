@@ -5,6 +5,8 @@ services:
     image: docker.io/redis:7-alpine
     volumes:
       - "./cache/redis:/data:rw"
+    ports:
+      - "6379:6379"
   alias-server:
     environment:
       - "GIN_MODE=debug"
