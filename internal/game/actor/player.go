@@ -3,6 +3,7 @@ package actor
 import (
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	"github.com/knightpp/alias-server/internal/ws"
+	"github.com/rs/zerolog"
 )
 
 type Player struct {
@@ -30,6 +31,15 @@ func (p Player) ToProto() *modelpb.Player {
 	}
 }
 
-func (p Player) RunLoop() error {
-	select {}
+func (p Player) RunLoop(log zerolog.Logger) error {
+	log = log.With().Str("player.id", p.Id).Str("component", "game.player").Logger()
+
+	for {
+		msg, err := p.conn.ReceiveMessage()
+		if err != nil {
+			return err
+		}
+
+		log.Debug().Interface("msg", msg).Msg("received message")
+	}
 }

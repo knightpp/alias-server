@@ -36,6 +36,20 @@ func (g *Game) JoinRoom(conn *ws.Conn, playerID, roomID string) error {
 		return fmt.Errorf("add player to lobby: %w", err)
 	}
 
-	err = player.RunLoop()
+	err = player.RunLoop(log)
 	return err
+}
+
+func (g *Game) RemovePlayer(playerID, roomID string) error {
+	room, ok := g.GetRoom(roomID)
+	if !ok {
+		return fmt.Errorf("no such room")
+	}
+
+	g.roomsMutex.Lock()
+	defer g.roomsMutex.Unlock()
+
+	delete(room.Lobby, playerID)
+
+	return nil
 }

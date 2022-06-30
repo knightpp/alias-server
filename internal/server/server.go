@@ -97,6 +97,8 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	playersWebsocketCurrent.Inc()
 	playersWebsocketTotal.Inc()
 
+	defer s.game.RemovePlayer(playerID, roomID)
+
 	err = s.game.JoinRoom(conn, playerID, roomID)
 	if err != nil {
 		_ = conn.SendFatal(&serverpb.FatalMessage{
