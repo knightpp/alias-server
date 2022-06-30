@@ -22,6 +22,26 @@ func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
+func (c *Conn) Inner() *websocket.Conn {
+	return c.conn
+}
+
+func (c *Conn) ReceiveMessage() (*serverpb.Message, error) {
+	mt, data, err := c.conn.ReadMessage()
+	if err != nil {
+		return nil, fmt.Errorf("read websocket: %w", err)
+	}
+
+	if mt != websocket.BinaryMessage {
+		return nil, fmt.Errorf("expected binary message")
+	}
+
+	var msg serverpb.Message
+
+	err = proto.Unmarshal(data, &msg)
+	return &msg, err
+}
+
 func (c *Conn) SendPlayerJoined(joined *serverpb.PlayerJoinedMessage) error {
 	msgBytes, err := proto.Marshal(&serverpb.Message{
 		Message: &serverpb.Message_Joined{
