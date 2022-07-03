@@ -22,8 +22,8 @@ type Room struct {
 
 	Password *string
 
-	log   zerolog.Logger
 	mutex sync.Mutex
+	log   zerolog.Logger
 }
 
 func NewRoomFromRequest(
@@ -37,11 +37,9 @@ func NewRoomFromRequest(
 		LeaderId: creatorID,
 		IsPublic: req.IsPublic,
 		Language: req.Language,
-		Lobby:    map[string]Player{},
-		Teams:    map[string]Team{},
+		Lobby:    make(map[string]Player),
+		Teams:    make(map[string]Team),
 		Password: req.Password,
-
-		mutex: sync.Mutex{},
 	}
 }
 
@@ -72,6 +70,27 @@ func (r *Room) SetLogger(log zerolog.Logger) {
 		Logger()
 }
 
+func (r *Room) RemovePlayer(playerID string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	delete(r.Lobby, playerID)
+
+	left := &serverpb.PlayerLeftMessage{
+		PlayerId: playerID,
+	}
+
+	for _, p := range r.Lobby {
+
+		err := p.conn.SendPlayerLeft(left)
+		if err != nil {
+			r.log.Err(err).Msg("failed to send player left msg")
+		}
+	}
+
+	return nil
+}
+
 func (r *Room) AddPlayerToLobby(p Player) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -95,7 +114,6 @@ func (r *Room) AddPlayerToLobby(p Player) error {
 		go func() {
 			// TODO: parallel
 			for _, p := range otherPlayers {
-				// TODO: log error
 				err := p.conn.SendPlayerJoined(&serverpb.PlayerJoinedMessage{
 					Player: p.ToProto(),
 				})

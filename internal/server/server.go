@@ -42,10 +42,6 @@ func New(log zerolog.Logger, playerDB storage.PlayerDB) *Server {
 	}
 }
 
-func (s *Server) Game() *game.Game {
-	return s.game
-}
-
 func (s *Server) CreateRoom(c *gin.Context) {
 	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 
@@ -79,32 +75,50 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
 	log.Trace().Msg("JoinRoom")
 
+	roomID := c.Param("room_id")
+	playerID := c.GetString(middleware.UserIDKey)
+
+	room, ok := s.game.GetRoom(roomID)
+	if !ok {
+		c.String(http.StatusNotFound, "no such room")
+		return
+	}
+
+	playerInfo, err := s.game.GetPlayerInfo(playerID)
+	if err != nil {
+		c.String(http.StatusNotFound, "no such player")
+		return
+	}
+
 	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Err(err).Msg("upgrade to websocket")
-		// upgrader sends response for us
 		return
 	}
 
 	conn := ws.Wrap(sock)
-
 	defer conn.Close()
-	defer playersWebsocketCurrent.Dec()
 
-	roomID := c.Param("room_id")
-	playerID := c.GetString(middleware.UserIDKey)
+	player := actor.NewPlayerFromPB(playerInfo, conn)
 
 	playersWebsocketCurrent.Inc()
+	defer playersWebsocketCurrent.Dec()
 	playersWebsocketTotal.Inc()
 
-	defer s.game.RemovePlayer(playerID, roomID)
-
-	err = s.game.JoinRoom(conn, playerID, roomID)
+	err = room.AddPlayerToLobby(player)
 	if err != nil {
 		_ = conn.SendFatal(&serverpb.FatalMessage{
 			Error: err.Error(),
 		})
-		log.Err(err).Msg("join room failed")
+		log.Err(err).Msg("AddPlayerToLobby failed")
+		return
+	}
+
+	defer room.RemovePlayer(playerID)
+
+	err = player.RunLoop(log)
+	if err != nil {
+		log.Err(err).Msg("player loop failed")
 		return
 	}
 }
