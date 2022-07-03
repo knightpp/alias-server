@@ -1,63 +1,71 @@
 package game
 
 import (
+	"context"
 	"fmt"
-	"sync"
+	"time"
 
+	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game/actor"
 	"github.com/knightpp/alias-server/internal/storage"
+	"github.com/knightpp/alias-server/internal/ws"
 	"github.com/rs/zerolog"
 )
 
 type Game struct {
 	log zerolog.Logger
 
-	rooms      map[string]*actor.Room
-	roomsMutex sync.Mutex
+	rooms fp.Locker[map[string]*actor.Room]
 
 	playerDB storage.PlayerDB
 }
 
 func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 	g := &Game{
-		log:        log,
-		rooms:      make(map[string]*actor.Room),
-		roomsMutex: sync.Mutex{},
-		playerDB:   playerDB,
+		log:      log,
+		rooms:    fp.NewLocker(make(map[string]*actor.Room)),
+		playerDB: playerDB,
 	}
 	return g
 }
 
 func (g *Game) CreateRoom(room *actor.Room) error {
-	g.roomsMutex.Lock()
-	defer g.roomsMutex.Unlock()
+	return fp.Lock1(g.rooms, func(rooms map[string]*actor.Room) error {
+		g.log.Debug().Interface("room", room).Msg("adding a new room")
 
-	g.log.Debug().Interface("room", room).Msg("adding a new room")
+		id := room.Id
+		_, exists := rooms[id]
+		if exists {
+			return fmt.Errorf("room with id=%s already exists", id)
+		}
 
-	id := room.Id
-	_, exists := g.rooms[id]
-	if exists {
-		return fmt.Errorf("room with id=%s already exists", id)
-	}
-
-	room.SetLogger(g.log)
-	g.rooms[id] = room
-
-	return nil
+		room.SetLogger(g.log)
+		rooms[id] = room
+		return nil
+	})
 }
 
 func (g *Game) ListRooms() []*actor.Room {
-	g.roomsMutex.Lock()
-	defer g.roomsMutex.Unlock()
-
-	return fp.Values(g.rooms)
+	return fp.Lock1(g.rooms, func(rooms map[string]*actor.Room) []*actor.Room {
+		return fp.Values(rooms)
+	})
 }
 
 func (g *Game) GetRoom(roomID string) (*actor.Room, bool) {
-	g.roomsMutex.Lock()
-	defer g.roomsMutex.Unlock()
+	return fp.Lock2(g.rooms, func(rooms map[string]*actor.Room) (*actor.Room, bool) {
+		room, ok := rooms[roomID]
+		return room, ok
+	})
+}
 
-	room, ok := g.rooms[roomID]
-	return room, ok
+func (g *Game) GetPlayerInfo(playerID string) (*modelpb.Player, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return g.playerDB.GetPlayer(ctx, playerID)
+}
+
+func (g *Game) NewPlayerActor(playerInfo *modelpb.Player, conn *ws.Conn) actor.Player {
+	return actor.NewPlayerFromPB(playerInfo, conn)
 }
