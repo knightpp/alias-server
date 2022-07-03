@@ -12,13 +12,13 @@ import (
 )
 
 type Room struct {
-	Id        string
-	Name      string
-	LeaderId  string
-	IsPublic  bool
-	Langugage string
-	Lobby     map[string]Player
-	Teams     map[string]Team
+	Id       string
+	Name     string
+	LeaderId string
+	IsPublic bool
+	Language string
+	Lobby    map[string]Player
+	Teams    map[string]Team
 
 	Password *string
 
@@ -32,14 +32,14 @@ func NewRoomFromRequest(
 ) *Room {
 	id := uuid.New().String()
 	return &Room{
-		Id:        id,
-		Name:      req.Name,
-		LeaderId:  creatorID,
-		IsPublic:  req.IsPublic,
-		Langugage: req.Language,
-		Lobby:     map[string]Player{},
-		Teams:     map[string]Team{},
-		Password:  req.Password,
+		Id:       id,
+		Name:     req.Name,
+		LeaderId: creatorID,
+		IsPublic: req.IsPublic,
+		Language: req.Language,
+		Lobby:    map[string]Player{},
+		Teams:    map[string]Team{},
+		Password: req.Password,
 
 		mutex: sync.Mutex{},
 	}
@@ -58,7 +58,7 @@ func (r *Room) toProtoUnsafe() *modelpb.Room {
 		Name:      r.Name,
 		LeaderId:  r.LeaderId,
 		IsPublic:  r.IsPublic,
-		Langugage: r.Langugage,
+		Langugage: r.Language,
 		Lobby:     fp.Map(fp.Values(r.Lobby), func(p Player) *modelpb.Player { return p.ToProto() }),
 		Teams:     fp.Map(fp.Values(r.Teams), func(t Team) *modelpb.Team { return t.ToProto() }),
 	}

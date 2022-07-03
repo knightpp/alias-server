@@ -35,7 +35,7 @@ func (g *Game) CreateRoom(room *actor.Room) error {
 
 	g.log.Debug().Interface("room", room).Msg("adding a new room")
 
-	id := string(room.Id)
+	id := room.Id
 	_, exists := g.rooms[id]
 	if exists {
 		return fmt.Errorf("room with id=%s already exists", id)
