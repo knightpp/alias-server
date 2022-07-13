@@ -43,22 +43,21 @@ func New(log zerolog.Logger, playerDB storage.PlayerDB) *Server {
 }
 
 func (s *Server) CreateRoom(c *gin.Context) {
-	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
-
-	log.Trace().Msg("CreateRoom")
+	log := s.log
+	log.Trace().Caller().Send()
 
 	var createRequest serverpb.CreateRoomRequest
 
 	err := c.MustBindWith(&createRequest, s.protoBind)
 	if err != nil {
-		c.String(http.StatusBadRequest, "invalid json: %s", err)
+		c.String(http.StatusBadRequest, "invalid request: %s", err)
 		return
 	}
 
 	creatorID := c.GetString(middleware.UserIDKey)
 	room := actor.NewRoomFromRequest(&createRequest, creatorID)
 
-	err = s.game.CreateRoom(room)
+	_, err = s.game.CreateRoom(room)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "couldn't add new room: %s", err)
 		return
@@ -72,8 +71,8 @@ func (s *Server) CreateRoom(c *gin.Context) {
 }
 
 func (s *Server) JoinRoom(c *gin.Context) {
-	log := s.log.With().Str("remote_ip", c.RemoteIP()).Logger()
-	log.Trace().Msg("JoinRoom")
+	log := s.log
+	log.Trace().Caller().Send()
 
 	roomID := c.Param("room_id")
 	playerID := c.GetString(middleware.UserIDKey)
@@ -123,9 +122,40 @@ func (s *Server) JoinRoom(c *gin.Context) {
 	}
 }
 
+func (s *Server) CreateTeam(c *gin.Context) {
+	log := s.log
+	log.Trace().Caller().Send()
+
+	var req serverpb.CreateTeamRequest
+
+	err := c.MustBindWith(&req, s.protoBind)
+	if err != nil {
+		c.String(http.StatusBadRequest, "invalid request: %s", err)
+		return
+	}
+
+	roomID := c.Param("room_id")
+
+	room, ok := s.game.GetRoom(roomID)
+	if !ok {
+		c.String(http.StatusNotFound, "no such room")
+		return
+	}
+
+	team, err := room.CreateTeam(&req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "couldn't create team: %s", err)
+		return
+	}
+
+	c.ProtoBuf(http.StatusOK, &serverpb.CreateTeamResponse{
+		Team: team.ToProto(),
+	})
+}
+
 func (s *Server) ListRooms(c *gin.Context) {
-	log := s.log.With().Interface("remote_ip", c.RemoteIP()).Logger()
-	log.Trace().Msg("ListRooms")
+	log := s.log
+	log.Trace().Caller().Send()
 
 	rooms := s.game.ListRooms()
 	roomsPb := fp.Map(rooms, func(r *actor.Room) *modelpb.Room { return r.ToProto() })
@@ -134,14 +164,14 @@ func (s *Server) ListRooms(c *gin.Context) {
 }
 
 func (s *Server) UserLogin(c *gin.Context) {
-	log := s.log.With().Interface("remote_ip", c.RemoteIP()).Logger()
-	log.Trace().Msg("UserLogin")
+	log := s.log
+	log.Trace().Caller().Send()
 
 	var options serverpb.UserSimpleLoginRequest
 
 	err := c.MustBindWith(&options, s.protoBind)
 	if err != nil {
-		c.String(http.StatusBadRequest, "invalid json: %s", err)
+		c.String(http.StatusBadRequest, "invalid request: %s", err)
 		return
 	}
 

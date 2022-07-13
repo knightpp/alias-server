@@ -7,8 +7,8 @@ import (
 type Team struct {
 	Id      string
 	Name    string
-	PlayerA Player
-	PlayerB Player
+	PlayerA *Player
+	PlayerB *Player
 }
 
 func (t Team) ToProto() *modelpb.Team {

@@ -9,7 +9,6 @@ import (
 	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game/actor"
 	"github.com/knightpp/alias-server/internal/storage"
-	"github.com/knightpp/alias-server/internal/ws"
 	"github.com/rs/zerolog"
 )
 
@@ -30,19 +29,19 @@ func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 	return g
 }
 
-func (g *Game) CreateRoom(room *actor.Room) error {
-	return fp.Lock1(g.rooms, func(rooms map[string]*actor.Room) error {
+func (g *Game) CreateRoom(room *actor.Room) (*actor.Room, error) {
+	return fp.Lock2(g.rooms, func(rooms map[string]*actor.Room) (*actor.Room, error) {
 		g.log.Debug().Interface("room", room).Msg("adding a new room")
 
 		id := room.Id
 		_, exists := rooms[id]
 		if exists {
-			return fmt.Errorf("room with id=%s already exists", id)
+			return nil, fmt.Errorf("room with id=%s already exists", id)
 		}
 
 		room.SetLogger(g.log)
 		rooms[id] = room
-		return nil
+		return room, nil
 	})
 }
 
@@ -64,8 +63,4 @@ func (g *Game) GetPlayerInfo(playerID string) (*modelpb.Player, error) {
 	defer cancel()
 
 	return g.playerDB.GetPlayer(ctx, playerID)
-}
-
-func (g *Game) NewPlayerActor(playerInfo *modelpb.Player, conn *ws.Conn) actor.Player {
-	return actor.NewPlayerFromPB(playerInfo, conn)
 }

@@ -11,3 +11,5 @@ tasks:
     cmds:
       - go build -tags=nomsgpack -o server ./cmd/server/main.go
       - strip server
+
+  gen: go generate ./...
