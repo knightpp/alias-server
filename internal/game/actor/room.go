@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
+	"github.com/knightpp/alias-server/internal/emoji"
 	"github.com/knightpp/alias-server/internal/fp"
-	"github.com/knightpp/alias-server/internal/ws"
 	"github.com/rs/zerolog"
 )
 
@@ -146,7 +146,7 @@ func (r *Room) CreateTeam(req *serverpb.CreateTeamRequest) (*Team, error) {
 		name = *req.Name
 	} else {
 		// TODO: random name, language aware
-		name = "random name"
+		name = emoji.Emoticons.Random() + " guy"
 	}
 
 	id := uuid.NewString()
@@ -159,8 +159,8 @@ func (r *Room) CreateTeam(req *serverpb.CreateTeamRequest) (*Team, error) {
 
 	r.Teams[id] = team
 
-	err := r.callAll(func(c ws.Conn) error {
-		return c.SendTeam(&serverpb.TeamMessage{
+	err := r.forEachPlayer(func(p *Player) error {
+		return p.conn.SendTeam(&serverpb.TeamMessage{
 			Team: team.ToProto(),
 		})
 	})
@@ -171,21 +171,21 @@ func (r *Room) CreateTeam(req *serverpb.CreateTeamRequest) (*Team, error) {
 	return team, nil
 }
 
-func (r *Room) callAll(f func(ws.Conn) error) error {
+func (r *Room) forEachPlayer(f func(p *Player) error) error {
 	// TODO: parallel
 	for _, p := range r.Lobby {
-		err := f(p.conn)
+		err := f(p)
 		if err != nil {
 			return err
 		}
 	}
 	for _, t := range r.Teams {
-		err := f(t.PlayerA.conn)
+		err := f(t.PlayerA)
 		if err != nil {
 			return err
 		}
 
-		err = f(t.PlayerB.conn)
+		err = f(t.PlayerB)
 		if err != nil {
 			return err
 		}

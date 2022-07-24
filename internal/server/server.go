@@ -113,6 +113,7 @@ func (s *Server) JoinRoom(c *gin.Context) {
 		return
 	}
 
+	// trunk-ignore(golangci-lint/errcheck)
 	defer room.RemovePlayer(playerID)
 
 	err = player.RunLoop(log)

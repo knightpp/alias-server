@@ -44,7 +44,11 @@ func run(logger zerolog.Logger) error {
 	gameServer := server.New(logger, playerDB)
 
 	r := gin.New()
-	r.SetTrustedProxies(nil)
+	err := r.SetTrustedProxies(nil)
+	if err != nil {
+		return fmt.Errorf("set trusted proxies: %w", err)
+	}
+
 	r.Use(middleware.ZerologLogger(logger))
 	r.Use(gin.Recovery())
 

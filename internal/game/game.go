@@ -31,7 +31,7 @@ func New(log zerolog.Logger, playerDB storage.PlayerDB) *Game {
 
 func (g *Game) CreateRoom(room *actor.Room) (*actor.Room, error) {
 	return fp.Lock2(g.rooms, func(rooms map[string]*actor.Room) (*actor.Room, error) {
-		g.log.Debug().Interface("room", room).Msg("adding a new room")
+		g.log.Trace().Interface("room", room).Msg("adding a new room")
 
 		id := room.Id
 		_, exists := rooms[id]
