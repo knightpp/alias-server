@@ -1,5 +1,7 @@
 package storage
 
+//go:generate mockery --name PlayerDB --with-expecter
+
 import (
 	"context"
 

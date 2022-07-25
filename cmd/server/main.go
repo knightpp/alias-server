@@ -44,7 +44,11 @@ func run(logger zerolog.Logger) error {
 	gameServer := server.New(logger, playerDB)
 
 	r := gin.New()
-	r.SetTrustedProxies(nil)
+	err := r.SetTrustedProxies(nil)
+	if err != nil {
+		return fmt.Errorf("set trusted proxies: %w", err)
+	}
+
 	r.Use(middleware.ZerologLogger(logger))
 	r.Use(gin.Recovery())
 
@@ -54,7 +58,8 @@ func run(logger zerolog.Logger) error {
 	{
 		group := r.Group("/", middleware.Authorized(playerDB))
 		group.GET("rooms", gameServer.ListRooms)
-		group.Any("room/join/:room_id", gameServer.JoinRoom)
+		group.Any("room/:room_id/join", gameServer.JoinRoom)
+		group.POST("room/:room_id/team", gameServer.CreateTeam)
 		group.POST("room", gameServer.CreateRoom)
 	}
 
