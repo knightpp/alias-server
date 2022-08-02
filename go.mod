@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
