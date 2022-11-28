@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	"github.com/knightpp/alias-server/internal/gravatar"
-	connmock "github.com/knightpp/alias-server/internal/ws/mocks"
+	connmock "github.com/knightpp/alias-server/pkg/ws/mocks"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )

@@ -18,7 +18,7 @@ import (
 	"github.com/knightpp/alias-server/internal/gravatar"
 	"github.com/knightpp/alias-server/internal/middleware"
 	"github.com/knightpp/alias-server/internal/storage"
-	"github.com/knightpp/alias-server/internal/ws"
+	"github.com/knightpp/alias-server/pkg/ws"
 	"github.com/rs/zerolog"
 )
 

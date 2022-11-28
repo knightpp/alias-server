@@ -5,7 +5,7 @@ import (
 
 	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
 	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
-	"github.com/knightpp/alias-server/internal/ws"
+	"github.com/knightpp/alias-server/pkg/ws"
 	"github.com/rs/zerolog"
 )
 

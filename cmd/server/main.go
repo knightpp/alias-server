@@ -12,21 +12,17 @@ import (
 	"github.com/knightpp/alias-server/internal/storage/redis"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	logger := log.Logger
-	logger = logger.Output(selectLogOutput())
-	logger = logger.Level(zerolog.TraceLevel)
-	log.Logger = logger
+	log := zerolog.New(selectLogOutput()).Level(zerolog.TraceLevel)
 
-	if err := run(logger); err != nil {
+	if err := run(log); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
 	}
 }
 
-func run(logger zerolog.Logger) error {
+func run(log zerolog.Logger) error {
 	var playerDB storage.PlayerDB
 	if url, ok := os.LookupEnv("REDIS_URL"); ok {
 		pdb, err := redis.NewFromURL(url)
@@ -41,7 +37,7 @@ func run(logger zerolog.Logger) error {
 		return fmt.Errorf("REDIS_ADDR must not be empty")
 	}
 
-	gameServer := server.New(logger, playerDB)
+	gameServer := server.New(log, playerDB)
 
 	r := gin.New()
 	err := r.SetTrustedProxies(nil)
@@ -49,14 +45,14 @@ func run(logger zerolog.Logger) error {
 		return fmt.Errorf("set trusted proxies: %w", err)
 	}
 
-	r.Use(middleware.ZerologLogger(logger))
+	r.Use(middleware.ZerologLogger(log))
 	r.Use(gin.Recovery())
 
 	log.Info().Msg("starting server")
 
 	r.POST("/user/login/simple", gameServer.UserLogin)
 	{
-		group := r.Group("/", middleware.Authorized(playerDB))
+		group := r.Group("/", middleware.Authorized(log, playerDB))
 		group.GET("rooms", gameServer.ListRooms)
 		group.Any("room/:room_id/join", gameServer.JoinRoom)
 		group.POST("room/:room_id/team", gameServer.CreateTeam)
@@ -68,7 +64,7 @@ func run(logger zerolog.Logger) error {
 		metrics.Any("/metrics", gin.WrapH(promhttp.Handler()))
 		err := metrics.Run(":9091")
 		if err != nil {
-			logger.Err(err).Msg("running prometheus")
+			log.Err(err).Msg("running prometheus")
 		}
 	}()
 

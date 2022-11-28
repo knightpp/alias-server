@@ -3,6 +3,12 @@ version: "3"
 tasks:
   default: task --list-all
 
+  run:
+    env:
+      REDIS_ADDR: "127.0.0.1:6379"
+    cmds:
+      - go run -v ./cmd/server/
+
   build:
     env:
       GOAMD64: v3

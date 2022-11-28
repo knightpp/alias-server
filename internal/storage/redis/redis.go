@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,6 +48,10 @@ func (r *redisImpl) SetPlayer(ctx context.Context, p *modelpb.Player) error {
 }
 
 func (r *redisImpl) GetPlayer(ctx context.Context, playerID string) (*modelpb.Player, error) {
+	if playerID == "" {
+		return nil, errors.New("error: player id is empty")
+	}
+
 	cmd := r.db.Get(ctx, playerID)
 
 	playerBytes, err := cmd.Bytes()

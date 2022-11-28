@@ -120,19 +120,21 @@ func (r *Room) AddPlayerToLobby(p *Player) error {
 		return fmt.Errorf("websocket send: %w", err)
 	}
 
-	if len(otherPlayers) > 0 {
-		for _, p := range otherPlayers {
-			p := p
-			go func() {
-				err := p.conn.SendPlayerJoined(&serverpb.PlayerJoinedMessage{
-					Player: p.ToProto(),
-				})
-				if err != nil {
-					r.log.Err(err).Msg("NotifyJoined failed")
-				}
-			}()
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(len(otherPlayers))
+	for _, p := range otherPlayers {
+		p := p
+		go func() {
+			err := p.conn.SendPlayerJoined(&serverpb.PlayerJoinedMessage{
+				Player: p.ToProto(),
+			})
+			if err != nil {
+				r.log.Err(err).Msg("NotifyJoined failed")
+			}
+		}()
 	}
+
+	wg.Wait()
 
 	return nil
 }

@@ -8,13 +8,7 @@ RUN apk add --no-cache 'binutils~=2'
 
 WORKDIR /src/alias-server
 
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
-
-COPY cmd cmd
-COPY internal internal
-COPY Taskfile.yaml .
+COPY . .
 
 RUN task build
 
