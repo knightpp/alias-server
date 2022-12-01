@@ -1,4 +1,4 @@
-FROM docker.io/golang:1.19.2-alpine as builder
+FROM docker.io/golang:1.19.3-alpine as builder
 
 ENV GIN_MODE=release
 
