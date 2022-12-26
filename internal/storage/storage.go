@@ -5,10 +5,10 @@ package storage
 import (
 	"context"
 
-	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
+	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 )
 
 type PlayerDB interface {
-	SetPlayer(ctx context.Context, p *modelpb.Player) error
-	GetPlayer(ctx context.Context, playerID string) (*modelpb.Player, error)
+	SetPlayer(ctx context.Context, p *gamesvc.Player) error
+	GetPlayer(ctx context.Context, playerID string) (*gamesvc.Player, error)
 }

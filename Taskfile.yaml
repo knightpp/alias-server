@@ -18,4 +18,6 @@ tasks:
       - go build -tags=nomsgpack -o server ./cmd/server/main.go
       - strip server
 
+  up: "docker compose up {{.CLI_ARGS}}"
+
   gen: go generate ./...

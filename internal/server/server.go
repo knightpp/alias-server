@@ -2,198 +2,97 @@ package server
 
 import (
 	"context"
-	"net/http"
-	"time"
+	"errors"
+	"fmt"
+	"sync"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
-	modelpb "github.com/knightpp/alias-proto/go/pkg/model/v1"
-	serverpb "github.com/knightpp/alias-proto/go/pkg/server/v1"
-	custombindings "github.com/knightpp/alias-server/internal/binding"
-	"github.com/knightpp/alias-server/internal/fp"
+	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/game"
-	"github.com/knightpp/alias-server/internal/game/actor"
-	"github.com/knightpp/alias-server/internal/gravatar"
-	"github.com/knightpp/alias-server/internal/middleware"
 	"github.com/knightpp/alias-server/internal/storage"
-	"github.com/knightpp/alias-server/pkg/ws"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
 )
 
-type Server struct {
-	log       zerolog.Logger
-	upgrader  websocket.Upgrader
-	game      *game.Game
-	playerDB  storage.PlayerDB
-	protoBind binding.Binding
+var _ gamesvc.GameServiceServer = (*GameService)(nil)
+
+type GameService struct {
+	gamesvc.UnimplementedGameServiceServer
+
+	log zerolog.Logger
+	db  storage.PlayerDB
+
+	roomsMu sync.Mutex
+	rooms   map[string]*game.Room
 }
 
-func New(log zerolog.Logger, playerDB storage.PlayerDB) *Server {
-	gameLogger := log.With().Str("component", "game").Logger()
-	serverLogger := log.With().Str("component", "server").Logger()
-	return &Server{
-		log:       serverLogger,
-		upgrader:  websocket.Upgrader{EnableCompression: true},
-		game:      game.New(gameLogger, playerDB),
-		playerDB:  playerDB,
-		protoBind: custombindings.NewProtobuf(log),
+func New(log zerolog.Logger, db storage.PlayerDB) *GameService {
+	return &GameService{
+		rooms: make(map[string]*game.Room),
+		log:   log,
+		db:    db,
 	}
 }
 
-func (s *Server) CreateRoom(c *gin.Context) {
-	log := s.log
-	log.Trace().Caller().Send()
+func (gs *GameService) ListRooms(_ context.Context, _ *gamesvc.ListRoomsRequest) (*gamesvc.ListRoomsResponse, error) {
+	gs.roomsMu.Lock()
+	defer gs.roomsMu.Unlock()
 
-	var createRequest serverpb.CreateRoomRequest
-
-	err := c.MustBindWith(&createRequest, s.protoBind)
-	if err != nil {
-		c.String(http.StatusBadRequest, "invalid request: %s", err)
-		return
+	roomsProto := make([]*gamesvc.Room, 0, len(gs.rooms))
+	for _, room := range gs.rooms {
+		roomsProto = append(roomsProto, room.GetProto())
 	}
 
-	creatorID := c.GetString(middleware.UserIDKey)
-	room := actor.NewRoomFromRequest(&createRequest, creatorID)
-
-	_, err = s.game.CreateRoom(room)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "couldn't add new room: %s", err)
-		return
-	}
-
-	roomsCreatedTotal.Inc()
-
-	c.ProtoBuf(http.StatusOK, &serverpb.CreateRoomResponse{
-		RoomId: room.Id,
-	})
+	return &gamesvc.ListRoomsResponse{
+		Rooms: roomsProto,
+	}, nil
 }
 
-func (s *Server) JoinRoom(c *gin.Context) {
-	log := s.log
-	log.Trace().Caller().Send()
+func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRequest) (*gamesvc.CreateRoomResponse, error) {
+	gs.roomsMu.Lock()
+	defer gs.roomsMu.Unlock()
 
-	roomID := c.Param("room_id")
-	playerID := c.GetString(middleware.UserIDKey)
-
-	room, ok := s.game.GetRoom(roomID)
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		c.String(http.StatusNotFound, "no such room")
-		return
+		return nil, errors.New("no metadata in request")
 	}
 
-	playerInfo, err := s.game.GetPlayerInfo(playerID)
-	if err != nil {
-		c.String(http.StatusNotFound, "no such player")
-		return
+	tokenMd := md.Get("token")
+	if len(tokenMd) != 1 {
+		return nil, fmt.Errorf("unexpected metadata value: %#v", tokenMd)
 	}
 
-	sock, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		log.Err(err).Msg("upgrade to websocket")
-		return
-	}
+	token := tokenMd[0]
+	// TODO: find player's id by token
+	_ = token
 
-	conn := ws.Wrap(sock)
-	defer conn.Close()
+	id := uuid.NewString()
+	room := game.NewRoom(id, "", req)
+	gs.rooms[id] = room
 
-	player := actor.NewPlayerFromPB(playerInfo, conn)
-
-	playersWebsocketCurrent.Inc()
-	defer playersWebsocketCurrent.Dec()
-	playersWebsocketTotal.Inc()
-
-	err = room.AddPlayerToLobby(player)
-	if err != nil {
-		_ = conn.SendFatal(&serverpb.FatalMessage{
-			Error: err.Error(),
-		})
-		log.Err(err).Msg("AddPlayerToLobby failed")
-		return
-	}
-
-	// trunk-ignore(golangci-lint/errcheck)
-	defer room.RemovePlayer(playerID)
-
-	err = player.RunLoop(log)
-	if err != nil {
-		log.Err(err).Msg("player loop failed")
-		return
-	}
+	return &gamesvc.CreateRoomResponse{
+		Id: id,
+	}, nil
 }
 
-func (s *Server) CreateTeam(c *gin.Context) {
-	log := s.log
-	log.Trace().Caller().Send()
-
-	var req serverpb.CreateTeamRequest
-
-	err := c.MustBindWith(&req, s.protoBind)
-	if err != nil {
-		c.String(http.StatusBadRequest, "invalid request: %s", err)
-		return
+func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
+	ctx := stream.Context()
+	roomIDMD := metadata.ValueFromIncomingContext(ctx, "room-id")
+	if len(roomIDMD) != 1 {
+		return fmt.Errorf("unexpected metadata room-id value: %#v", roomIDMD)
 	}
 
-	roomID := c.Param("room_id")
+	roomID := roomIDMD[0]
+	gs.roomsMu.Lock()
+	defer gs.roomsMu.Unlock()
 
-	room, ok := s.game.GetRoom(roomID)
+	room, ok := gs.rooms[roomID]
 	if !ok {
-		c.String(http.StatusNotFound, "no such room")
-		return
+		return fmt.Errorf("could not find room with id=%q", roomID)
 	}
 
-	team, err := room.CreateTeam(&req)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "couldn't create team: %s", err)
-		return
-	}
+	wg := room.AddPlayer(stream, nil)
+	wg.Wait()
 
-	c.ProtoBuf(http.StatusOK, &serverpb.CreateTeamResponse{
-		Team: team.ToProto(),
-	})
-}
-
-func (s *Server) ListRooms(c *gin.Context) {
-	log := s.log
-	log.Trace().Caller().Send()
-
-	rooms := s.game.ListRooms()
-	roomsPb := fp.Map(rooms, func(r *actor.Room) *modelpb.Room { return r.ToProto() })
-
-	c.ProtoBuf(http.StatusOK, &serverpb.ListRoomsResponse{Rooms: roomsPb})
-}
-
-func (s *Server) UserLogin(c *gin.Context) {
-	log := s.log
-	log.Trace().Caller().Send()
-
-	var options serverpb.UserSimpleLoginRequest
-
-	err := c.MustBindWith(&options, s.protoBind)
-	if err != nil {
-		c.String(http.StatusBadRequest, "invalid request: %s", err)
-		return
-	}
-
-	id := uuid.New().String()
-	playerPb := &modelpb.Player{
-		Id:          id,
-		Name:        options.Name,
-		GravatarUrl: gravatar.GetUrlOrDefault(options.Email),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err = s.playerDB.SetPlayer(ctx, playerPb)
-	if err != nil {
-		log.Err(err).Msg("failed to create a user")
-		c.String(http.StatusInternalServerError, "couldn't create a user")
-		return
-	}
-
-	c.ProtoBuf(http.StatusOK, &serverpb.UserSimpleLoginResponse{
-		Player: playerPb,
-	})
+	return nil
 }
