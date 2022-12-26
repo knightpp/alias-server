@@ -84,12 +84,14 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	roomID := roomIDMD[0]
 	gs.roomsMu.Lock()
-	defer gs.roomsMu.Unlock()
 
 	room, ok := gs.rooms[roomID]
 	if !ok {
+		gs.roomsMu.Unlock()
 		return fmt.Errorf("could not find room with id=%q", roomID)
 	}
+
+	gs.roomsMu.Unlock()
 
 	wg := room.AddPlayer(stream, nil)
 	wg.Wait()
