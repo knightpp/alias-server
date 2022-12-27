@@ -24,7 +24,7 @@ func main() {
 }
 
 func run(log zerolog.Logger) error {
-	var playerDB storage.PlayerDB
+	var playerDB storage.Player
 	if url, ok := os.LookupEnv("REDIS_URL"); ok {
 		pdb, err := redis.NewFromURL(url)
 		if err != nil {

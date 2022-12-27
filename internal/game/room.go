@@ -5,21 +5,25 @@ import (
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/mitchellh/copystructure"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 type Room struct {
 	protoMu  sync.Mutex
 	proto    *gamesvc.Room
 	password *string
+	log      zerolog.Logger
 
 	mu    sync.Mutex
 	Lobby []*Player
 	Teams []*Team
 }
 
-func NewRoom(roomID, leaderID string, req *gamesvc.CreateRoomRequest) *Room {
+func NewRoom(log zerolog.Logger, roomID, leaderID string, req *gamesvc.CreateRoomRequest) *Room {
 	return &Room{
+		log:     log.With().Str("room-id", roomID).Logger(),
+		protoMu: sync.Mutex{},
+		mu:      sync.Mutex{},
 		proto: &gamesvc.Room{
 			Id:        roomID,
 			Name:      req.Name,
@@ -48,12 +52,36 @@ func (r *Room) AddPlayer(socket gamesvc.GameService_JoinServer, proto *gamesvc.P
 
 	r.proto.Lobby = append(r.proto.Lobby, proto)
 
-	player, done := newPlayer(socket, proto, r.errorCallback)
+	log := r.log.With().Str("player-id", proto.Id).Str("player-name", proto.Name).Logger()
+	player, done := newPlayer(log, socket, proto, r.errorCallback)
 	r.Lobby = append(r.Lobby, player)
 
 	r.announceNewPlayer()
 
 	return done
+}
+
+func (r *Room) HasPlayer(playerID string) bool {
+	r.protoMu.Lock()
+	defer r.protoMu.Unlock()
+
+	for _, player := range r.proto.Lobby {
+		if player.Id == playerID {
+			return true
+		}
+	}
+
+	for _, team := range r.proto.Teams {
+		if team.PlayerA.Id == playerID {
+			return true
+		}
+
+		if team.PlayerB.Id == playerID {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *Room) announceNewPlayer() {
@@ -73,6 +101,8 @@ func (r *Room) announceNewPlayer() {
 }
 
 func (r *Room) errorCallback(player *Player, err error) {
-	log.Err(err).Interface("player", player.proto).
+	r.log.Err(err).Interface("player", player.proto).
 		Msg("tried to send message and something went wrong")
+
+	// TODO: remove player and announce it
 }

@@ -15,10 +15,10 @@ var _ loginsvc.LoginServiceServer = (*LoginService)(nil)
 type LoginService struct {
 	loginsvc.UnimplementedLoginServiceServer
 
-	db storage.PlayerDB
+	db storage.Player
 }
 
-func New(db storage.PlayerDB) *LoginService {
+func New(db storage.Player) *LoginService {
 	return &LoginService{
 		db: db,
 	}
@@ -28,7 +28,7 @@ func (l *LoginService) LoginGuest(ctx context.Context, req *loginsvc.LoginGuestR
 	id := uuid.NewString()
 	// TODO: save to DB
 	auth := uuid.NewString()
-	err := l.db.SetPlayer(ctx, &gamesvc.Player{
+	err := l.db.SetPlayer(ctx, auth, &gamesvc.Player{
 		Id:          id,
 		Name:        req.Name,
 		GravatarUrl: gravatar.GetUrlOrDefault(req.Email),

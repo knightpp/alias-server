@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -15,15 +15,18 @@ type Player struct {
 	socket      gamesvc.GameService_JoinServer
 	msgChan     chan func(gamesvc.GameService_JoinServer) error
 	errCallback func(player *Player, err error)
+	log         zerolog.Logger
 }
 
 func newPlayer(
+	log zerolog.Logger,
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
 	errCallback func(player *Player, err error),
 ) (*Player, *sync.WaitGroup) {
 	ch := make(chan func(gamesvc.GameService_JoinServer) error, 1)
 	player := &Player{
+		log:         log,
 		proto:       proto,
 		socket:      socket,
 		msgChan:     ch,

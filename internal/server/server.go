@@ -20,13 +20,13 @@ type GameService struct {
 	gamesvc.UnimplementedGameServiceServer
 
 	log zerolog.Logger
-	db  storage.PlayerDB
+	db  storage.Player
 
 	roomsMu sync.Mutex
 	rooms   map[string]*game.Room
 }
 
-func New(log zerolog.Logger, db storage.PlayerDB) *GameService {
+func New(log zerolog.Logger, db storage.Player) *GameService {
 	return &GameService{
 		rooms: make(map[string]*game.Room),
 		log:   log,
@@ -67,7 +67,7 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 	_ = token
 
 	id := uuid.NewString()
-	room := game.NewRoom(id, "", req)
+	room := game.NewRoom(gs.log, id, "", req)
 	gs.rooms[id] = room
 
 	return &gamesvc.CreateRoomResponse{
@@ -77,12 +77,19 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 
 func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 	ctx := stream.Context()
-	roomIDMD := metadata.ValueFromIncomingContext(ctx, "room-id")
-	if len(roomIDMD) != 1 {
-		return fmt.Errorf("unexpected metadata room-id value: %#v", roomIDMD)
+
+	md, _ := metadata.FromIncomingContext(ctx)
+
+	roomID, err := singleFieldMD("room-id", md)
+	if err != nil {
+		return fmt.Errorf("get room id from md: %w", err)
 	}
 
-	roomID := roomIDMD[0]
+	authToken, err := singleFieldMD("token", md)
+	if err != nil {
+		return fmt.Errorf("get auth token from md: %w", err)
+	}
+
 	gs.roomsMu.Lock()
 
 	room, ok := gs.rooms[roomID]
@@ -93,8 +100,26 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	gs.roomsMu.Unlock()
 
-	wg := room.AddPlayer(stream, nil)
+	player, err := gs.db.GetPlayer(ctx, authToken)
+	if err != nil {
+		return fmt.Errorf("get player: %w", err)
+	}
+
+	if room.HasPlayer(player.Id) {
+		return fmt.Errorf("player %q already in the room", player.Id)
+	}
+
+	wg := room.AddPlayer(stream, player)
 	wg.Wait()
 
 	return nil
+}
+
+func singleFieldMD(field string, md metadata.MD) (string, error) {
+	values := md.Get(field)
+	if len(values) != 1 {
+		return "", fmt.Errorf("metadata entry should be of length 1, but was %d", len(values))
+	}
+
+	return values[0], nil
 }
