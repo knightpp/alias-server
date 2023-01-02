@@ -2,74 +2,71 @@ package game
 
 import (
 	"fmt"
-	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type Player struct {
 	proto *gamesvc.Player
 
-	socket      gamesvc.GameService_JoinServer
-	msgChan     chan func(gamesvc.GameService_JoinServer) error
-	errCallback func(player *Player, err error)
-	log         zerolog.Logger
+	socket  gamesvc.GameService_JoinServer
+	msgChan chan func(gamesvc.GameService_JoinServer) error
+	log     zerolog.Logger
 }
 
 func newPlayer(
 	log zerolog.Logger,
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
-	errCallback func(player *Player, err error),
-) (*Player, *sync.WaitGroup) {
+) *Player {
 	ch := make(chan func(gamesvc.GameService_JoinServer) error, 1)
 	player := &Player{
-		log:         log,
-		proto:       proto,
-		socket:      socket,
-		msgChan:     ch,
-		errCallback: errCallback,
+		log:     log,
+		proto:   proto,
+		socket:  socket,
+		msgChan: ch,
 	}
 
-	wg := &sync.WaitGroup{}
+	return player
+}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+func (p *Player) Start() error {
+	var eg errgroup.Group
 
-		for f := range ch {
-			err := f(socket)
+	eg.Go(func() error {
+		for f := range p.msgChan {
+			err := f(p.socket)
 			if err != nil {
-				errCallback(player, fmt.Errorf("execute func: %w", err))
-				break
+				return fmt.Errorf("execute func: %w", err)
 			}
 		}
-	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+		return nil
+	})
+
+	eg.Go(func() error {
+		defer close(p.msgChan)
 
 		for {
-			msg, err := socket.Recv()
+			msg, err := p.socket.Recv()
 			if err != nil {
-				errCallback(player, fmt.Errorf("socket recv: %w", err))
-				return
+				return fmt.Errorf("socket recv: %w", err)
 			}
 
-			log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
+			p.log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
 
 			_ = msg
 		}
-	}()
+	})
 
-	return player, wg
+	return eg.Wait()
 }
 
-// SendMsg is a non-blocking send
-func (p *Player) SendMsg(msg *gamesvc.Message) {
+// QueueMsg is a non-blocking send
+func (p *Player) QueueMsg(msg *gamesvc.Message) {
 	p.msgChan <- func(gs gamesvc.GameService_JoinServer) error {
 		return gs.Send(msg)
 	}

@@ -1,8 +1,8 @@
 module github.com/knightpp/alias-server
 
-go 1.18
+go 1.19
 
-replace github.com/knightpp/alias-proto/go => ../alias-proto/go
+// replace github.com/knightpp/alias-proto/go => ../alias-proto/go
 
 require (
 	github.com/gin-gonic/gin v1.8.2
@@ -12,6 +12,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
+	golang.org/x/sync v0.1.0
 	google.golang.org/grpc v1.51.0
 	google.golang.org/protobuf v1.28.1
 )

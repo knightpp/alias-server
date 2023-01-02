@@ -68,6 +68,7 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 
 	id := uuid.NewString()
 	room := game.NewRoom(gs.log, id, "", req)
+	go room.Start()
 	gs.rooms[id] = room
 
 	return &gamesvc.CreateRoomResponse{
@@ -109,10 +110,7 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 		return fmt.Errorf("player %q already in the room", player.Id)
 	}
 
-	wg := room.AddPlayer(stream, player)
-	wg.Wait()
-
-	return nil
+	return room.AddAndStartPlayer(stream, player)
 }
 
 func singleFieldMD(field string, md metadata.MD) (string, error) {

@@ -40,3 +40,20 @@ func Values[K comparable, V any](m map[K]V) []V {
 	}
 	return slice
 }
+
+func FilterInPlace[T any](slice []T, pred func(T) bool) []T {
+	newSlice := slice[:0]
+
+	for _, el := range slice {
+		if pred(el) {
+			newSlice = append(newSlice, el)
+		}
+	}
+
+	var empty T
+	for i := len(newSlice); i < len(slice); i++ {
+		slice[i] = empty
+	}
+
+	return newSlice
+}
