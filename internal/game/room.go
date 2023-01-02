@@ -124,7 +124,7 @@ func (r *Room) removePlayer(playerID string) bool {
 
 	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *Player) bool {
 		// TODO: potential data races if player struct accesses itself
-		return p.proto.Id == playerID
+		return p.proto.Id != playerID
 	})
 
 	// TODO: filter r.Teams
@@ -147,6 +147,10 @@ func (r *Room) removePlayer(playerID string) bool {
 
 func (r *Room) announceNewPlayer() {
 	send := func(p *Player) {
+		if p == nil {
+			return
+		}
+
 		p.QueueMsg(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: &gamesvc.UpdateRoom{
