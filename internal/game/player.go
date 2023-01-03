@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -10,7 +11,9 @@ import (
 )
 
 type Player struct {
-	proto *gamesvc.Player
+	ID          string
+	Name        string
+	GravatarUrl string
 
 	socket  gamesvc.GameService_JoinServer
 	msgChan chan func(gamesvc.GameService_JoinServer) error
@@ -24,8 +27,11 @@ func newPlayer(
 ) *Player {
 	ch := make(chan func(gamesvc.GameService_JoinServer) error, 1)
 	player := &Player{
+		ID:          proto.Id,
+		Name:        proto.Name,
+		GravatarUrl: proto.GravatarUrl,
+
 		log:     log,
-		proto:   proto,
 		socket:  socket,
 		msgChan: ch,
 	}
@@ -33,7 +39,19 @@ func newPlayer(
 	return player
 }
 
-func (p *Player) Start() error {
+func (p *Player) GetProto() *gamesvc.Player {
+	if p == nil {
+		return nil
+	}
+
+	return &gamesvc.Player{
+		Id:          p.ID,
+		Name:        p.Name,
+		GravatarUrl: p.GravatarUrl,
+	}
+}
+
+func (p *Player) Start(roomChan chan func(*Room)) error {
 	var eg errgroup.Group
 
 	eg.Go(func() error {
@@ -58,7 +76,22 @@ func (p *Player) Start() error {
 
 			p.log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
 
-			_ = msg
+			switch v := msg.Message.(type) {
+			case *gamesvc.Message_CreateTeam:
+				roomChan <- func(r *Room) {
+					r.removePlayer(p.ID)
+
+					team := &Team{
+						ID:      uuid.NewString(),
+						Name:    v.CreateTeam.Name,
+						PlayerA: p,
+						PlayerB: nil,
+					}
+					r.Teams = append(r.Teams, team)
+				}
+			default:
+				p.log.Warn().Msgf("unhandled message: %T", msg.Message)
+			}
 		}
 	})
 
