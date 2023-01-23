@@ -66,16 +66,20 @@ func (r *Room) Start() {
 
 func (r *Room) GetProto() *gamesvc.Room {
 	return runFn1(r.actorChan, func(r *Room) *gamesvc.Room {
-		return &gamesvc.Room{
-			Id:        r.Id,
-			Name:      r.Name,
-			LeaderId:  r.LeaderId,
-			IsPublic:  r.IsPublic,
-			Langugage: r.Langugage,
-			Lobby:     []*gamesvc.Player{},
-			Teams:     []*gamesvc.Team{},
-		}
+		return r.getProto()
 	})
+}
+
+func (r *Room) getProto() *gamesvc.Room {
+	return &gamesvc.Room{
+		Id:        r.Id,
+		Name:      r.Name,
+		LeaderId:  r.LeaderId,
+		IsPublic:  r.IsPublic,
+		Langugage: r.Langugage,
+		Lobby:     []*gamesvc.Player{},
+		Teams:     []*gamesvc.Team{},
+	}
 }
 
 func (r *Room) getLobbyProto() []*gamesvc.Player {
@@ -156,7 +160,7 @@ func (r *Room) announceNewPlayer() {
 		p.QueueMsg(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: &gamesvc.UpdateRoom{
-					Room:     r.GetProto(),
+					Room:     r.getProto(),
 					Password: r.Password,
 				},
 			},
