@@ -71,14 +71,24 @@ func (r *Room) GetProto() *gamesvc.Room {
 }
 
 func (r *Room) getProto() *gamesvc.Room {
+	lobby := make([]*gamesvc.Player, len(r.Lobby))
+	for i, p := range r.Lobby {
+		lobby[i] = p.ToProto()
+	}
+
+	teams := make([]*gamesvc.Team, len(r.Teams))
+	for i, t := range r.Teams {
+		teams[i] = t.ToProto()
+	}
+
 	return &gamesvc.Room{
 		Id:        r.Id,
 		Name:      r.Name,
 		LeaderId:  r.LeaderId,
 		IsPublic:  r.IsPublic,
 		Langugage: r.Langugage,
-		Lobby:     []*gamesvc.Player{},
-		Teams:     []*gamesvc.Team{},
+		Lobby:     lobby,
+		Teams:     teams,
 	}
 }
 

@@ -58,7 +58,12 @@ func (r *redisImpl) GetPlayer(ctx context.Context, token string) (*gamesvc.Playe
 
 	playerBytes, err := cmd.Bytes()
 	if err != nil {
-		return nil, fmt.Errorf("get redis bytes: %w", err)
+		switch {
+		case errors.Is(err, redis.Nil):
+			return nil, storage.ErrNotFound
+		default:
+			return nil, fmt.Errorf("get redis bytes: %w", err)
+		}
 	}
 
 	playerPb := &gamesvc.Player{}

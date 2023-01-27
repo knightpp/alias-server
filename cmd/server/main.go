@@ -43,7 +43,7 @@ func run(log zerolog.Logger) error {
 	addr := fmt.Sprintf("localhost:%d", 8080)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal().Msgf("failed to listen: %v", err)
+		return fmt.Errorf("listen socket: %w", err)
 	}
 
 	log.Info().Str("addr", addr).Msg("starting GRPC server")

@@ -14,6 +14,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	AuthKey   = "token"
+	RoomIDKey = "room-id"
+)
+
 var _ gamesvc.GameServiceServer = (*GameService)(nil)
 
 type GameService struct {
@@ -63,11 +68,14 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 	}
 
 	token := tokenMd[0]
-	// TODO: find player's id by token
-	_ = token
+
+	player, err := gs.db.GetPlayer(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("get player: %w", err)
+	}
 
 	id := uuid.NewString()
-	room := game.NewRoom(gs.log, id, "", req)
+	room := game.NewRoom(gs.log, id, player.Id, req)
 	go room.Start()
 	gs.rooms[id] = room
 
@@ -81,12 +89,12 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	md, _ := metadata.FromIncomingContext(ctx)
 
-	roomID, err := singleFieldMD("room-id", md)
+	roomID, err := singleFieldMD(RoomIDKey, md)
 	if err != nil {
 		return fmt.Errorf("get room id from md: %w", err)
 	}
 
-	authToken, err := singleFieldMD("token", md)
+	authToken, err := singleFieldMD(AuthKey, md)
 	if err != nil {
 		return fmt.Errorf("get auth token from md: %w", err)
 	}

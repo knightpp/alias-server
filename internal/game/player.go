@@ -39,7 +39,7 @@ func newPlayer(
 	return player
 }
 
-func (p *Player) GetProto() *gamesvc.Player {
+func (p *Player) ToProto() *gamesvc.Player {
 	if p == nil {
 		return nil
 	}

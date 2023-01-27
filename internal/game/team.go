@@ -14,7 +14,7 @@ func (t *Team) ToProto() *gamesvc.Team {
 	return &gamesvc.Team{
 		Id:      t.ID,
 		Name:    t.Name,
-		PlayerA: t.PlayerA.GetProto(),
-		PlayerB: t.PlayerB.GetProto(),
+		PlayerA: t.PlayerA.ToProto(),
+		PlayerB: t.PlayerB.ToProto(),
 	}
 }
