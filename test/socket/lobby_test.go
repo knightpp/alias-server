@@ -135,3 +135,51 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 		}).WithContext(ctx).Should(matcher.EqualCmp(roomMsg))
 	}
 }
+
+func TestJoin_CreateTeam(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	srv, err := testserver.CreateAndStart(t)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	ctx := context.Background()
+	player := &gamesvc.Player{
+		Id:   "id-1",
+		Name: "player-1",
+	}
+
+	p, err := srv.NewPlayer(ctx, player)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	room := &gamesvc.CreateRoomRequest{
+		Name:      "room-1",
+		IsPublic:  true,
+		Langugage: "UA",
+		Password:  nil,
+	}
+
+	conn, err := p.CreateRoomAndJoin(ctx, room)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	{
+		var update gamesvc.Message_UpdateRoom
+		err = conn.RecvAndAssert(&update)
+		g.Expect(err).ShouldNot(HaveOccurred())
+	}
+
+	teamName := "my super duper name"
+	err = conn.Sock().Send(&gamesvc.Message{
+		Message: &gamesvc.Message_CreateTeam{
+			CreateTeam: &gamesvc.MsgCreateTeam{
+				Name: teamName,
+			},
+		},
+	})
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	var update gamesvc.Message_UpdateRoom
+	err = conn.RecvAndAssert(&update)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(update.UpdateRoom.Room.Teams).To(HaveLen(1))
+	g.Expect(update.UpdateRoom.Room.Teams[0].Name).To(matcher.EqualCmp(teamName))
+}

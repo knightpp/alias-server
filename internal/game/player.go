@@ -88,7 +88,9 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 						PlayerB: nil,
 					}
 					r.Teams = append(r.Teams, team)
+					r.announceNewPlayer()
 				}
+
 			default:
 				p.log.Warn().Msgf("unhandled message: %T", msg.Message)
 			}
