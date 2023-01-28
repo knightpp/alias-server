@@ -3,6 +3,7 @@ package testserver
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	clone "github.com/huandu/go-clone/generic"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -71,4 +72,22 @@ func (tp *TestPlayer) CreateRoomAndJoin(ctx context.Context, req *gamesvc.Create
 	}
 
 	return tp.Join(ctx, roomID)
+}
+
+func (tpr *TestPlayerInRoom) RecvAndAssert(out any) error {
+	msg, err := tpr.sock.Recv()
+	if err != nil {
+		return fmt.Errorf("recv msg: %w", err)
+	}
+
+	expected := reflect.TypeOf(out)
+	actual := reflect.TypeOf(msg.Message)
+
+	if expected != actual {
+		return fmt.Errorf("expected: %s, actual: %s", expected, actual)
+	}
+
+	reflect.ValueOf(out).Elem().Set(reflect.ValueOf(msg.Message).Elem())
+
+	return nil
 }
