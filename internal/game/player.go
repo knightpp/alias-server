@@ -3,8 +3,8 @@ package game
 import (
 	"fmt"
 
-	"github.com/google/uuid"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -15,6 +15,7 @@ type Player struct {
 	Name        string
 	GravatarUrl string
 
+	uuidGen uuidgen.Generator
 	socket  gamesvc.GameService_JoinServer
 	msgChan chan func(gamesvc.GameService_JoinServer) error
 	log     zerolog.Logger
@@ -22,21 +23,21 @@ type Player struct {
 
 func newPlayer(
 	log zerolog.Logger,
+	gen uuidgen.Generator,
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
 ) *Player {
 	ch := make(chan func(gamesvc.GameService_JoinServer) error, 1)
-	player := &Player{
+	return &Player{
 		ID:          proto.Id,
 		Name:        proto.Name,
 		GravatarUrl: proto.GravatarUrl,
 
 		log:     log,
+		uuidGen: gen,
 		socket:  socket,
 		msgChan: ch,
 	}
-
-	return player
 }
 
 func (p *Player) ToProto() *gamesvc.Player {
@@ -82,7 +83,7 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 					r.removePlayer(p.ID)
 
 					team := &Team{
-						ID:      uuid.NewString(),
+						ID:      p.uuidGen.NewString(),
 						Name:    v.CreateTeam.Name,
 						PlayerA: p,
 						PlayerB: nil,

@@ -3,6 +3,7 @@ package game
 import (
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/fp"
+	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/status"
 )
@@ -20,6 +21,7 @@ type Room struct {
 
 	actorChan chan func(*Room)
 	log       zerolog.Logger
+	gen       uuidgen.Generator
 }
 
 func runFn0[T any](actorChan chan func(T), fn func(r T)) {
@@ -45,10 +47,17 @@ func runFn1[T any, R1 any](actorChan chan func(T), fn func(r T) R1) R1 {
 	return r1
 }
 
-func NewRoom(log zerolog.Logger, roomID, leaderID string, req *gamesvc.CreateRoomRequest) *Room {
+func NewRoom(
+	log zerolog.Logger,
+	roomID, leaderID string,
+	req *gamesvc.CreateRoomRequest,
+	gen uuidgen.Generator,
+) *Room {
 	return &Room{
 		log:       log.With().Str("room-id", roomID).Logger(),
 		actorChan: make(chan func(*Room)),
+		gen:       gen,
+
 		Id:        roomID,
 		Name:      req.Name,
 		LeaderId:  leaderID,
@@ -99,7 +108,7 @@ func (r *Room) getLobbyProto() []*gamesvc.Player {
 func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *gamesvc.Player) error {
 	player := runFn1(r.actorChan, func(r *Room) *Player {
 		log := r.log.With().Str("player-id", proto.Id).Str("player-name", proto.Name).Logger()
-		player := newPlayer(log, socket, proto)
+		player := newPlayer(log, r.gen, socket, proto)
 		r.Lobby = append(r.Lobby, player)
 		return player
 	})

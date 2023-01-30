@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/google/uuid"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/game"
 	"github.com/knightpp/alias-server/internal/storage"
+	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 )
@@ -24,18 +24,20 @@ var _ gamesvc.GameServiceServer = (*GameService)(nil)
 type GameService struct {
 	gamesvc.UnimplementedGameServiceServer
 
-	log zerolog.Logger
-	db  storage.Player
+	log     zerolog.Logger
+	uuidGen uuidgen.Generator
+	db      storage.Player
 
 	roomsMu sync.Mutex
 	rooms   map[string]*game.Room
 }
 
-func New(log zerolog.Logger, db storage.Player) *GameService {
+func New(log zerolog.Logger, db storage.Player, gen uuidgen.Generator) *GameService {
 	return &GameService{
-		rooms: make(map[string]*game.Room),
-		log:   log,
-		db:    db,
+		rooms:   make(map[string]*game.Room),
+		log:     log,
+		db:      db,
+		uuidGen: gen,
 	}
 }
 
@@ -74,8 +76,8 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 		return nil, fmt.Errorf("get player: %w", err)
 	}
 
-	id := uuid.NewString()
-	room := game.NewRoom(gs.log, id, player.Id, req)
+	id := gs.uuidGen.NewString()
+	room := game.NewRoom(gs.log, id, player.Id, req, gs.uuidGen)
 	go room.Start()
 	gs.rooms[id] = room
 

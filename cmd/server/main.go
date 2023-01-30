@@ -11,6 +11,7 @@ import (
 	"github.com/knightpp/alias-server/internal/server"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/redis"
+	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 )
@@ -38,7 +39,7 @@ func run(log zerolog.Logger) error {
 		return fmt.Errorf("REDIS_ADDR must not be empty")
 	}
 
-	gameServer := server.New(log, playerDB)
+	gameServer := server.New(log, playerDB, uuidgen.NewGoogleUUID())
 
 	addr := fmt.Sprintf("localhost:%d", 8080)
 	lis, err := net.Listen("tcp", addr)

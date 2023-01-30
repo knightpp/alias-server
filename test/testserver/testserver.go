@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const TestUUID = "00000000-0000-0000-0000-000000000000"
+
 type TestServer struct {
 	playerDB storage.Player
 	lis      net.Listener
@@ -23,12 +25,18 @@ type TestServer struct {
 	log      zerolog.Logger
 }
 
+type constantUUIDGen struct{}
+
+func (c constantUUIDGen) NewString() string {
+	return TestUUID
+}
+
 func CreateAndStart(t *testing.T) (*TestServer, error) {
 	t.Helper()
 
 	playerDB := memory.New()
 	log := zerolog.New(zerolog.NewTestWriter(t))
-	gameServer := server.New(log, playerDB)
+	gameServer := server.New(log, playerDB, constantUUIDGen{})
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

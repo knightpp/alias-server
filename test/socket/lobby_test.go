@@ -13,38 +13,42 @@ import (
 func TestJoin_OnePlayer(t *testing.T) {
 	g := NewGomegaWithT(t)
 
+	playerProto := &gamesvc.Player{
+		Id:   "id-1",
+		Name: "player-1",
+	}
+	roomReq := &gamesvc.CreateRoomRequest{
+		Name:      "room-1",
+		IsPublic:  true,
+		Langugage: "UA",
+		Password:  nil,
+	}
+
 	createAndJoin := func(t *testing.T) *testserver.TestPlayerInRoom {
-		playerProto := &gamesvc.Player{
-			Id:   "id-1",
-			Name: "player-1",
-		}
-		room := &gamesvc.CreateRoomRequest{
-			Name:      "room-1",
-			IsPublic:  true,
-			Langugage: "UA",
-			Password:  nil,
-		}
+		// FIXME: clone
+		roomReq := *roomReq
+		playerProto := *playerProto
 
 		srv, err := testserver.CreateAndStart(t)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
 		ctx := context.Background()
 
-		player, err := srv.NewPlayer(ctx, playerProto)
+		player, err := srv.NewPlayer(ctx, &playerProto)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
-		conn, err := player.CreateRoomAndJoin(ctx, room)
+		conn, err := player.CreateRoomAndJoin(ctx, &roomReq)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
 		var update gamesvc.Message_UpdateRoom
 		expectedMsg := &gamesvc.UpdateRoom{
 			Room: &gamesvc.Room{
 				Id:        "",
-				Name:      room.Name,
+				Name:      roomReq.Name,
 				LeaderId:  playerProto.Id,
-				IsPublic:  room.IsPublic,
-				Langugage: room.Langugage,
-				Lobby:     []*gamesvc.Player{playerProto},
+				IsPublic:  roomReq.IsPublic,
+				Langugage: roomReq.Langugage,
+				Lobby:     []*gamesvc.Player{&playerProto},
 				Teams:     []*gamesvc.Team{},
 			},
 			Password: nil,
@@ -73,21 +77,32 @@ func TestJoin_OnePlayer(t *testing.T) {
 			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
 				g := NewGomegaWithT(t)
 				teamName := "my super duper name"
-				err := p.Sock().Send(&gamesvc.Message{
-					Message: &gamesvc.Message_CreateTeam{
-						CreateTeam: &gamesvc.MsgCreateTeam{
-							Name: teamName,
+				expectedMsg := &gamesvc.UpdateRoom{
+					Room: &gamesvc.Room{
+						Id:        testserver.TestUUID,
+						Name:      roomReq.Name,
+						LeaderId:  playerProto.Id,
+						IsPublic:  roomReq.IsPublic,
+						Langugage: roomReq.Langugage,
+						Lobby:     []*gamesvc.Player{},
+						Teams: []*gamesvc.Team{
+							{
+								Id:      testserver.TestUUID,
+								Name:    teamName,
+								PlayerA: playerProto,
+							},
 						},
 					},
-				})
+					Password: nil,
+				}
+				err := p.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
 				var update gamesvc.Message_UpdateRoom
 				err = p.RecvAndAssert(&update)
 
 				g.Expect(err).ShouldNot(HaveOccurred())
-				g.Expect(update.UpdateRoom.Room.Teams).To(HaveLen(1))
-				g.Expect(update.UpdateRoom.Room.Teams[0].Name).To(matcher.EqualCmp(teamName))
+				g.Expect(update.UpdateRoom).To(matcher.EqualCmp(expectedMsg))
 			},
 		},
 	}
@@ -145,7 +160,7 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 
 	roomMsg := &gamesvc.UpdateRoom{
 		Room: &gamesvc.Room{
-			Id:        "",
+			Id:        testserver.TestUUID,
 			Name:      room.Name,
 			LeaderId:  player1.Id,
 			IsPublic:  room.IsPublic,
@@ -166,7 +181,6 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 			err = conn.RecvAndAssert(&update)
 
 			g.Expect(err).ShouldNot(HaveOccurred())
-			update.UpdateRoom.Room.Id = ""
 
 			return update.UpdateRoom
 		}).WithContext(ctx).Should(matcher.EqualCmp(roomMsg))

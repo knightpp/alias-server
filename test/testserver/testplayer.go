@@ -91,3 +91,13 @@ func (tpr *TestPlayerInRoom) RecvAndAssert(out any) error {
 
 	return nil
 }
+
+func (tpr *TestPlayerInRoom) CreateTeam(name string) error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_CreateTeam{
+			CreateTeam: &gamesvc.MsgCreateTeam{
+				Name: name,
+			},
+		},
+	})
+}
