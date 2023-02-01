@@ -10,7 +10,7 @@ require (
 	github.com/huandu/go-clone/generic v1.4.0
 	github.com/knightpp/alias-proto/go v0.0.0-00010101000000-000000000000
 	github.com/onsi/gomega v1.24.1
-	github.com/rs/zerolog v1.28.0
+	github.com/rs/zerolog v1.29.0
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/sync v0.1.0
 	google.golang.org/grpc v1.52.0
