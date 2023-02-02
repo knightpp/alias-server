@@ -4,3 +4,6 @@
 
 # Caches
 /cache/
+
+*.out
+*.test
