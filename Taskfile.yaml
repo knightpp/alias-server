@@ -15,8 +15,12 @@ tasks:
       CGO_ENABLED: 0
 
     cmds:
-      - go build -tags=nomsgpack -o server ./cmd/server/main.go
+      - go build -o server ./cmd/server/main.go
       - strip server
+
+  test:
+    cmds:
+      - go test -cover -race ./...
 
   up: "docker compose up {{.CLI_ARGS}}"
 

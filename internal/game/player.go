@@ -17,7 +17,6 @@ type Player struct {
 
 	uuidGen uuidgen.Generator
 	socket  gamesvc.GameService_JoinServer
-	msgChan chan func(gamesvc.GameService_JoinServer) error
 	log     zerolog.Logger
 }
 
@@ -27,7 +26,6 @@ func newPlayer(
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
 ) *Player {
-	ch := make(chan func(gamesvc.GameService_JoinServer) error, 1)
 	return &Player{
 		ID:          proto.Id,
 		Name:        proto.Name,
@@ -36,7 +34,6 @@ func newPlayer(
 		log:     log,
 		uuidGen: gen,
 		socket:  socket,
-		msgChan: ch,
 	}
 }
 
@@ -56,19 +53,6 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 	var eg errgroup.Group
 
 	eg.Go(func() error {
-		for f := range p.msgChan {
-			err := f(p.socket)
-			if err != nil {
-				return fmt.Errorf("execute func: %w", err)
-			}
-		}
-
-		return nil
-	})
-
-	eg.Go(func() error {
-		defer close(p.msgChan)
-
 		for {
 			msg, err := p.socket.Recv()
 			if err != nil {
@@ -101,9 +85,7 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 	return eg.Wait()
 }
 
-// QueueMsg is a non-blocking send
-func (p *Player) QueueMsg(msg *gamesvc.Message) {
-	p.msgChan <- func(gs gamesvc.GameService_JoinServer) error {
-		return gs.Send(msg)
-	}
+// SendMsg is a non-blocking send
+func (p *Player) SendMsg(msg *gamesvc.Message) error {
+	return p.socket.Send(msg)
 }

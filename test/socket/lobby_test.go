@@ -122,8 +122,6 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 	srv, err := testserver.CreateAndStart(t)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	ctx := context.Background()
-
 	room := &gamesvc.CreateRoomRequest{
 		Name:      "room-1",
 		IsPublic:  true,
@@ -140,6 +138,11 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 	}
 
 	conn1, conn2 := func() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(func() {
+			cancel()
+		})
+
 		p1, err := srv.NewPlayer(ctx, player1)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
@@ -183,6 +186,6 @@ func TestJoin_SecondPlayerJoined(t *testing.T) {
 			g.Expect(err).ShouldNot(HaveOccurred())
 
 			return update.UpdateRoom
-		}).WithContext(ctx).Should(matcher.EqualCmp(roomMsg))
+		}).Should(matcher.EqualCmp(roomMsg))
 	}
 }

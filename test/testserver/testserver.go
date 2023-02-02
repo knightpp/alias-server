@@ -23,6 +23,7 @@ type TestServer struct {
 	lis      net.Listener
 	service  *server.GameService
 	log      zerolog.Logger
+	t        *testing.T
 }
 
 type constantUUIDGen struct{}
@@ -52,7 +53,7 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 	}()
 
 	t.Cleanup(func() {
-		grpcServer.Stop()
+		grpcServer.GracefulStop()
 	})
 
 	return &TestServer{
@@ -60,6 +61,7 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 		service:  gameServer,
 		lis:      lis,
 		log:      log,
+		t:        t,
 	}, nil
 }
 
@@ -77,5 +79,5 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 
 	client := gamesvc.NewGameServiceClient(conn)
 
-	return newTestPlayer(client, player, token), nil
+	return newTestPlayer(client, player, token, ts.t), nil
 }

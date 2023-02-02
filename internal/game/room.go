@@ -156,12 +156,12 @@ func (r *Room) removePlayer(playerID string) bool {
 
 	var changed bool
 	for _, team := range r.Teams {
-		if team.PlayerA.ID == playerID {
+		if team.PlayerA != nil && team.PlayerA.ID == playerID {
 			changed = true
 			team.PlayerA = nil
 		}
 
-		if team.PlayerB.ID == playerID {
+		if team.PlayerB != nil && team.PlayerB.ID == playerID {
 			changed = true
 			team.PlayerB = nil
 		}
@@ -176,7 +176,7 @@ func (r *Room) announceNewPlayer() {
 			return
 		}
 
-		p.QueueMsg(&gamesvc.Message{
+		p.SendMsg(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: &gamesvc.UpdateRoom{
 					Room:     r.getProto(),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"testing"
 
 	clone "github.com/huandu/go-clone/generic"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -25,13 +26,15 @@ type TestPlayer struct {
 	authToken string
 	player    *gamesvc.Player
 	client    gamesvc.GameServiceClient
+	t         *testing.T
 }
 
-func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string) *TestPlayer {
+func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string, t *testing.T) *TestPlayer {
 	return &TestPlayer{
 		client:    client,
 		authToken: auth,
 		player:    clone.Clone(player),
+		t:         t,
 	}
 }
 
@@ -41,6 +44,8 @@ func (tp *TestPlayer) Proto() *gamesvc.Player {
 
 func (tp *TestPlayer) Join(ctx context.Context, roomID string) (*TestPlayerInRoom, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, server.RoomIDKey, roomID, server.AuthKey, tp.authToken)
+	ctx, cancel := context.WithCancel(ctx)
+	tp.t.Cleanup(cancel)
 
 	sock, err := tp.client.Join(ctx)
 	if err != nil {
