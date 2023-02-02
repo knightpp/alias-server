@@ -20,11 +20,19 @@ tasks:
 
   test:
     cmds:
+      # -coverpkg=$(fd . internal/ -t d -x echo github.com/knightpp/alias-server/{} | tr '\n' ',') \
       - >
         go test \
+          -tags test \
           -coverpkg=./... \
           -coverprofile=coverage.out \
+          -race \
           ./test/socket/
+
+  cover:
+    deps:
+      - test
+    cmds:
       - go tool cover -html=coverage.out
 
   up: "docker compose up {{.CLI_ARGS}}"

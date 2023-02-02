@@ -1,3 +1,4 @@
+// go:build test
 package testserver
 
 import (
@@ -16,10 +17,15 @@ type TestPlayerInRoom struct {
 	sock      gamesvc.GameService_JoinClient
 	authToken string
 	player    *gamesvc.Player
+	cancel    func()
 }
 
 func (ctp *TestPlayerInRoom) Sock() gamesvc.GameService_JoinClient {
 	return ctp.sock
+}
+
+func (ctp *TestPlayerInRoom) Cancel() {
+	ctp.cancel()
 }
 
 type TestPlayer struct {
@@ -56,6 +62,7 @@ func (tp *TestPlayer) Join(ctx context.Context, roomID string) (*TestPlayerInRoo
 		sock:      sock,
 		authToken: tp.authToken,
 		player:    tp.player,
+		cancel:    cancel,
 	}, nil
 }
 
