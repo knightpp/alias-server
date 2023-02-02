@@ -178,7 +178,58 @@ func TestTwoPlayers(t *testing.T) {
 
 					return update.UpdateRoom
 				}).Should(matcher.EqualCmp(roomMsg))
+			},
+		},
+		{
+			name: "second player join team",
+			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
+				g := NewGomegaWithT(t)
 
+				const teamName = "team-1"
+				err := conn1.CreateTeam("team-1")
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				var update gamesvc.Message_UpdateRoom
+				err = conn2.RecvAndAssert(&update)
+				g.Expect(err).ShouldNot(HaveOccurred())
+				err = conn2.RecvAndAssert(&update)
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				teams := update.UpdateRoom.Room.Teams
+				g.Expect(teams).To(HaveLen(1))
+
+				err = conn2.JoinTeam(teams[0].Id)
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				roomMsg := &gamesvc.UpdateRoom{
+					Room: &gamesvc.Room{
+						Id:        testserver.TestUUID,
+						Name:      room.Name,
+						LeaderId:  player1.Id,
+						IsPublic:  room.IsPublic,
+						Langugage: room.Langugage,
+						Lobby:     []*gamesvc.Player{},
+						Teams: []*gamesvc.Team{
+							{
+								Id:      testserver.TestUUID,
+								Name:    teamName,
+								PlayerA: player1,
+								PlayerB: player2,
+							},
+						},
+					},
+					Password: nil,
+				}
+				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+					g.Eventually(func(g Gomega) *gamesvc.UpdateRoom {
+						var update gamesvc.Message_UpdateRoom
+
+						err := conn.RecvAndAssert(&update)
+						g.Expect(err).ShouldNot(HaveOccurred())
+
+						return update.UpdateRoom
+					}).Should(matcher.EqualCmp(roomMsg))
+				}
 			},
 		},
 	}

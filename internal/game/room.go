@@ -134,11 +134,11 @@ func (r *Room) HasPlayer(playerID string) bool {
 		}
 
 		for _, team := range r.Teams {
-			if team.PlayerA.ID == playerID {
+			if team.PlayerA != nil && team.PlayerA.ID == playerID {
 				return true
 			}
 
-			if team.PlayerB.ID == playerID {
+			if team.PlayerB != nil && team.PlayerB.ID == playerID {
 				return true
 			}
 		}

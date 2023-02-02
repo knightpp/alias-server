@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-clone/generic v1.4.0
 	github.com/knightpp/alias-proto/go v0.0.0-20230131161028-d77d03b7020f
+	github.com/life4/genesis v1.1.0
 	github.com/onsi/gomega v1.26.0
 	github.com/redis/go-redis/v9 v9.0.2
 	github.com/rs/zerolog v1.29.0

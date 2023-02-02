@@ -5,6 +5,7 @@ import (
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/uuidgen"
+	"github.com/life4/genesis/slices"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -75,9 +76,31 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 					r.Teams = append(r.Teams, team)
 					r.announceNewPlayer()
 				}
+			case *gamesvc.Message_JoinTeam:
+				roomChan <- func(r *Room) {
+					team, ok := slices.Find(r.Teams, func(t *Team) bool {
+						return t.ID == v.JoinTeam.TeamId
+					})
+					if ok != nil {
+						p.log.Fatal().Msg("TODO")
+						return
+					}
 
+					r.removePlayer(p.ID)
+					switch {
+					case team.PlayerA == nil:
+						team.PlayerA = p
+					case team.PlayerB == nil:
+						team.PlayerB = p
+					default:
+						p.log.Fatal().Msg("TODO")
+						return
+					}
+
+					r.announceNewPlayer()
+				}
 			default:
-				p.log.Warn().Msgf("unhandled message: %T", msg.Message)
+				p.log.Fatal().Msgf("unhandled message: %T", msg.Message)
 			}
 		}
 	})

@@ -113,3 +113,13 @@ func (tpr *TestPlayerInRoom) CreateTeam(name string) error {
 		},
 	})
 }
+
+func (tpr *TestPlayerInRoom) JoinTeam(id string) error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_JoinTeam{
+			JoinTeam: &gamesvc.MsgJoinTeam{
+				TeamId: id,
+			},
+		},
+	})
+}
