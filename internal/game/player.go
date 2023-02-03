@@ -99,8 +99,9 @@ func (p *Player) Start(roomChan chan func(*Room)) error {
 
 					r.announceNewPlayer()
 				}
+			// case *gamesvc.
 			default:
-				p.log.Fatal().Msgf("unhandled message: %T", msg.Message)
+				return fmt.Errorf("unhandled message: %T", msg.Message)
 			}
 		}
 	})

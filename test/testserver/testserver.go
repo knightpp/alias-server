@@ -48,13 +48,18 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 	log.Info().Str("addr", lis.Addr().String()).Msg("starting GRPC server")
 
 	grpcServer := grpc.NewServer()
+	gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
+
 	go func() {
-		gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
 		_ = grpcServer.Serve(lis)
 	}()
 
 	t.Cleanup(func() {
 		grpcServer.GracefulStop()
+		err := lis.Close()
+		if err != nil {
+			log.Err(err).Msg("close listener")
+		}
 	})
 
 	return &TestServer{

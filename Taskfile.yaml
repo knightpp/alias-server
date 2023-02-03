@@ -1,5 +1,8 @@
 version: "3"
 
+env:
+  GOAMD64: v3
+
 tasks:
   default: task --list-all
 
@@ -11,28 +14,25 @@ tasks:
 
   build:
     env:
-      GOAMD64: v3
       CGO_ENABLED: 0
-
     cmds:
       - go build -o server ./cmd/server/main.go
       - strip server
 
   test:
     cmds:
+      - go test -tags test -timeout 5s -race {{.CLI_ARGS}} ./...
+
+  cover:
+    cmds:
       # -coverpkg=$(fd . internal/ -t d -x echo github.com/knightpp/alias-server/{} | tr '\n' ',') \
       - >
         go test \
+          -timeout 5s \
           -tags test \
           -coverpkg=./... \
           -coverprofile=coverage.out \
-          -race \
-          ./test/socket/
-
-  cover:
-    deps:
-      - test
-    cmds:
+          ./...
       - go tool cover -html=coverage.out
 
   up: "docker compose up {{.CLI_ARGS}}"
