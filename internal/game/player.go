@@ -5,9 +5,7 @@ import (
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/uuidgen"
-	"github.com/life4/genesis/slices"
 	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -16,6 +14,7 @@ type Player struct {
 	Name        string
 	GravatarUrl string
 
+	msgChan chan *gamesvc.Message
 	uuidGen uuidgen.Generator
 	socket  gamesvc.GameService_JoinServer
 	log     zerolog.Logger
@@ -35,6 +34,7 @@ func newPlayer(
 		log:     log,
 		uuidGen: gen,
 		socket:  socket,
+		msgChan: make(chan *gamesvc.Message),
 	}
 }
 
@@ -50,63 +50,17 @@ func (p *Player) ToProto() *gamesvc.Player {
 	}
 }
 
-func (p *Player) Start(roomChan chan func(*Room)) error {
-	var eg errgroup.Group
-
-	eg.Go(func() error {
-		for {
-			msg, err := p.socket.Recv()
-			if err != nil {
-				return fmt.Errorf("socket recv: %w", err)
-			}
-
-			p.log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
-
-			switch v := msg.Message.(type) {
-			case *gamesvc.Message_CreateTeam:
-				roomChan <- func(r *Room) {
-					r.removePlayer(p.ID)
-
-					team := &Team{
-						ID:      p.uuidGen.NewString(),
-						Name:    v.CreateTeam.Name,
-						PlayerA: p,
-						PlayerB: nil,
-					}
-					r.Teams = append(r.Teams, team)
-					r.announceNewPlayer()
-				}
-			case *gamesvc.Message_JoinTeam:
-				roomChan <- func(r *Room) {
-					team, ok := slices.Find(r.Teams, func(t *Team) bool {
-						return t.ID == v.JoinTeam.TeamId
-					})
-					if ok != nil {
-						p.log.Fatal().Msg("TODO")
-						return
-					}
-
-					r.removePlayer(p.ID)
-					switch {
-					case team.PlayerA == nil:
-						team.PlayerA = p
-					case team.PlayerB == nil:
-						team.PlayerB = p
-					default:
-						p.log.Fatal().Msg("TODO")
-						return
-					}
-
-					r.announceNewPlayer()
-				}
-			// case *gamesvc.
-			default:
-				return fmt.Errorf("unhandled message: %T", msg.Message)
-			}
+func (p *Player) Start() error {
+	for {
+		msg, err := p.socket.Recv()
+		if err != nil {
+			return fmt.Errorf("socket recv: %w", err)
 		}
-	})
 
-	return eg.Wait()
+		p.log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
+
+		p.msgChan <- msg
+	}
 }
 
 // SendMsg is a non-blocking send

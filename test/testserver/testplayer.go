@@ -35,19 +35,35 @@ func (tp *TestPlayer) Proto() *gamesvc.Player {
 func (tp *TestPlayer) Join(ctx context.Context, roomID string) (*TestPlayerInRoom, error) {
 	ctx = metadata.AppendToOutgoingContext(ctx, server.RoomIDKey, roomID, server.AuthKey, tp.authToken)
 	ctx, cancel := context.WithCancel(ctx)
-	tp.t.Cleanup(cancel)
 
 	sock, err := tp.client.Join(ctx)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("join socket: %w", err)
 	}
 
-	return &TestPlayerInRoom{
+	playerInRoom := &TestPlayerInRoom{
+		done:      make(chan struct{}),
+		C:         make(chan *gamesvc.Message),
 		sock:      sock,
 		authToken: tp.authToken,
 		player:    tp.player,
 		cancel:    cancel,
-	}, nil
+	}
+
+	tp.t.Cleanup(func() {
+		playerInRoom.Cancel()
+	})
+
+	go func() {
+		err := playerInRoom.Start()
+		if err != nil {
+			// TODO: Fail
+			// tp.t.Fail()
+		}
+	}()
+
+	return playerInRoom, nil
 }
 
 func (tp *TestPlayer) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRequest) (string, error) {

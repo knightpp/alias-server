@@ -2,20 +2,55 @@ package testserver
 
 import (
 	"fmt"
-	"reflect"
+	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 )
 
 type TestPlayerInRoom struct {
+	C chan *gamesvc.Message
+
 	sock      gamesvc.GameService_JoinClient
 	authToken string
 	player    *gamesvc.Player
-	cancel    func()
+
+	once   sync.Once
+	done   chan struct{}
+	cancel func()
+}
+
+func (ctp *TestPlayerInRoom) Start() error {
+	for {
+		msg, err := ctp.sock.Recv()
+		if err != nil {
+			return fmt.Errorf("recv msg: %w", err)
+		}
+
+		select {
+		case <-ctp.done:
+			return nil
+
+		case ctp.C <- msg:
+			continue
+		}
+	}
+}
+
+func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
+	select {
+	case msg := <-ctp.C:
+		return msg
+	default:
+		return nil
+	}
 }
 
 func (ctp *TestPlayerInRoom) ID() string {
 	return ctp.player.Id
+}
+
+func (ctp *TestPlayerInRoom) Proto() *gamesvc.Player {
+	return ctp.player
 }
 
 func (ctp *TestPlayerInRoom) Sock() gamesvc.GameService_JoinClient {
@@ -24,24 +59,9 @@ func (ctp *TestPlayerInRoom) Sock() gamesvc.GameService_JoinClient {
 
 func (ctp *TestPlayerInRoom) Cancel() {
 	ctp.cancel()
-}
-
-func (tpr *TestPlayerInRoom) RecvAndAssert(out any) error {
-	msg, err := tpr.sock.Recv()
-	if err != nil {
-		return fmt.Errorf("recv msg: %w", err)
-	}
-
-	expected := reflect.TypeOf(out)
-	actual := reflect.TypeOf(msg.Message)
-
-	if expected != actual {
-		return fmt.Errorf("expected: %s, actual: %s", expected, actual)
-	}
-
-	reflect.ValueOf(out).Elem().Set(reflect.ValueOf(msg.Message).Elem())
-
-	return nil
+	ctp.once.Do(func() {
+		close(ctp.done)
+	})
 }
 
 func (tpr *TestPlayerInRoom) CreateTeam(name string) error {

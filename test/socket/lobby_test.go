@@ -28,10 +28,9 @@ func TestJoin_OnePlayer(t *testing.T) {
 		conn, err := player.CreateRoomAndJoin(ctx, roomReq)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
-		var update gamesvc.Message_UpdateRoom
 		expectedMsg := &gamesvc.UpdateRoom{
 			Room: &gamesvc.Room{
-				Id:        "",
+				Id:        testserver.TestUUID,
 				Name:      roomReq.Name,
 				LeaderId:  playerProto.Id,
 				IsPublic:  roomReq.IsPublic,
@@ -42,11 +41,11 @@ func TestJoin_OnePlayer(t *testing.T) {
 			Password: nil,
 		}
 
-		err = conn.RecvAndAssert(&update)
-
-		update.UpdateRoom.Room.Id = ""
-		g.Expect(err).ShouldNot(HaveOccurred())
-		g.Expect(update.UpdateRoom).To(matcher.EqualCmp(expectedMsg))
+		g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_UpdateRoom{
+				UpdateRoom: expectedMsg,
+			},
+		}))
 
 		return conn
 	}
@@ -87,11 +86,11 @@ func TestJoin_OnePlayer(t *testing.T) {
 				err := p.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				var update gamesvc.Message_UpdateRoom
-				err = p.RecvAndAssert(&update)
-
-				g.Expect(err).ShouldNot(HaveOccurred())
-				g.Expect(update.UpdateRoom).To(matcher.EqualCmp(expectedMsg))
+				g.Eventually(p.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: expectedMsg,
+					},
+				}))
 			},
 		},
 	}
@@ -107,8 +106,8 @@ func TestJoin_OnePlayer(t *testing.T) {
 }
 
 func TestTwoPlayers(t *testing.T) {
-	room, player1, player2 := protoRoom(), protoPlayer1(), protoPlayer2()
-	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
+	updateRoomReqFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
+	room := protoRoom()
 
 	tests := []struct {
 		name string
@@ -118,58 +117,39 @@ func TestTwoPlayers(t *testing.T) {
 			name: "second player joined should correctly update",
 			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
 				g := NewGomegaWithT(t)
-
-				roomMsg := updateRoomReqFactory(withLobby(player1, player2))
+				roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
 
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					asyncEventually(g, func() (*gamesvc.UpdateRoom, error) {
-						var update gamesvc.Message_UpdateRoom
-
-						err := conn.RecvAndAssert(&update)
-						if err != nil {
-							return nil, err
-						}
-
-						return update.UpdateRoom, nil
-					}, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
 				}
 			},
 		},
 		{
 			name: "second player left",
 			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
+				g := NewGomegaWithT(t)
 				conn2.Cancel()
 
-				g := NewGomegaWithT(t)
 				roomMsg := &gamesvc.UpdateRoom{
 					Room: &gamesvc.Room{
 						Id:        testserver.TestUUID,
 						Name:      room.Name,
-						LeaderId:  player1.Id,
+						LeaderId:  conn1.ID(),
 						IsPublic:  room.IsPublic,
 						Langugage: room.Langugage,
 						Lobby: []*gamesvc.Player{
-							player1,
+							conn1.Proto(),
 						},
 						Teams: []*gamesvc.Team{},
 					},
 					Password: nil,
 				}
 
-				var update gamesvc.Message_UpdateRoom
-				err := conn2.RecvAndAssert(&update)
-				g.Expect(err).Should(HaveOccurred())
-
-				asyncEventually(g, func() (*gamesvc.UpdateRoom, error) {
-					var update gamesvc.Message_UpdateRoom
-
-					err := conn1.RecvAndAssert(&update)
-					if err != nil {
-						return nil, err
-					}
-
-					return update.UpdateRoom, nil
-				}, "1s").Should(matcher.EqualCmp(roomMsg))
+				g.Eventually(conn2.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: roomMsg,
+					},
+				}))
 			},
 		},
 		{
@@ -178,51 +158,38 @@ func TestTwoPlayers(t *testing.T) {
 				g := NewGomegaWithT(t)
 
 				const teamName = "team-1"
-				err := conn1.CreateTeam("team-1")
+				err := conn1.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				var update gamesvc.Message_UpdateRoom
-				err = conn2.RecvAndAssert(&update)
-				g.Expect(err).ShouldNot(HaveOccurred())
-				err = conn2.RecvAndAssert(&update)
-				g.Expect(err).ShouldNot(HaveOccurred())
+				roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
+				roomMsg.Room.Teams = append(roomMsg.Room.Teams, &gamesvc.Team{
+					Id:   testserver.TestUUID,
+					Name: teamName,
+				})
 
-				teams := update.UpdateRoom.Room.Teams
-				g.Expect(teams).To(HaveLen(1))
-
-				err = conn2.JoinTeam(teams[0].Id)
-				g.Expect(err).ShouldNot(HaveOccurred())
-
-				roomMsg := &gamesvc.UpdateRoom{
-					Room: &gamesvc.Room{
-						Id:        testserver.TestUUID,
-						Name:      room.Name,
-						LeaderId:  player1.Id,
-						IsPublic:  room.IsPublic,
-						Langugage: room.Langugage,
-						Lobby:     []*gamesvc.Player{},
-						Teams: []*gamesvc.Team{
-							{
-								Id:      testserver.TestUUID,
-								Name:    teamName,
-								PlayerA: player1,
-								PlayerB: player2,
-							},
-						},
+				g.Eventually(conn1.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: roomMsg,
 					},
-					Password: nil,
-				}
+				}))
+				g.Eventually(conn2.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: roomMsg,
+					},
+				}))
+
+				err = conn2.JoinTeam(testserver.TestUUID)
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				roomMsg = updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
+				roomMsg.Room.Teams = append(roomMsg.Room.Teams, &gamesvc.Team{
+					Id:      testserver.TestUUID,
+					Name:    teamName,
+					PlayerA: conn1.Proto(),
+					PlayerB: conn2.Proto(),
+				})
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					asyncEventually(g, func() (*gamesvc.UpdateRoom, error) {
-						var update gamesvc.Message_UpdateRoom
-
-						err := conn.RecvAndAssert(&update)
-						if err != nil {
-							return nil, err
-						}
-
-						return update.UpdateRoom, nil
-					}, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
 				}
 			},
 		},
@@ -238,27 +205,18 @@ func TestTwoPlayers(t *testing.T) {
 					Room: &gamesvc.Room{
 						Id:        testserver.TestUUID,
 						Name:      room.Name,
-						LeaderId:  player2.Id,
+						LeaderId:  conn2.ID(),
 						IsPublic:  room.IsPublic,
 						Langugage: room.Langugage,
 						Lobby: []*gamesvc.Player{
-							player1, player2,
+							conn1.Proto(), conn2.Proto(),
 						},
 						Teams: []*gamesvc.Team{},
 					},
 					Password: nil,
 				}
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					asyncEventually(g, func() (*gamesvc.UpdateRoom, error) {
-						var update gamesvc.Message_UpdateRoom
-
-						err := conn.RecvAndAssert(&update)
-						if err != nil {
-							return nil, err
-						}
-
-						return update.UpdateRoom, nil
-					}, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
 				}
 			},
 		},
