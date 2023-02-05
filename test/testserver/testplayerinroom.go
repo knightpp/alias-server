@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	"github.com/onsi/gomega"
 )
 
 type TestPlayerInRoom struct {
@@ -28,6 +29,7 @@ func (ctp *TestPlayerInRoom) Start() error {
 
 		select {
 		case <-ctp.done:
+			close(ctp.C)
 			return nil
 
 		case ctp.C <- msg:
@@ -36,12 +38,17 @@ func (ctp *TestPlayerInRoom) Start() error {
 	}
 }
 
-func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
+func (ctp *TestPlayerInRoom) Poll(g gomega.Gomega) *gamesvc.Message {
 	select {
 	case msg, ok := <-ctp.C:
 		if !ok {
 			panic("chanel was closed")
 		}
+
+		if msg, ok := msg.Message.(*gamesvc.Message_Error); ok {
+			g.Expect(msg.Error.Error).To(gomega.BeNil())
+		}
+
 		return msg
 	default:
 		return nil

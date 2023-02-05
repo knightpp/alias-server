@@ -68,7 +68,17 @@ func (r *Room) Start() {
 	for {
 		select {
 		case tuple := <-r.allMsgChan:
-			r.handleMessage(tuple.A, tuple.B)
+			err := r.handleMessage(tuple.A, tuple.B)
+			if err != nil {
+				_ = tuple.B.SendMsg(&gamesvc.Message{
+					Message: &gamesvc.Message_Error{
+						Error: &gamesvc.MsgError{
+							Error: fmt.Sprintf("handle message: %s", err),
+						},
+					},
+				})
+			}
+
 		case fn := <-r.actorChan:
 			fn(r)
 
@@ -216,7 +226,20 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 
 	err := player.Start()
 	if err != nil {
-		r.errorCallback(player, err)
+		r.log.
+			Err(err).
+			Stringer("status_code", status.Code(err)).
+			Interface("player", player).
+			Msg("tried to send message and something went wrong")
+
+		r.Do(func(r *Room) {
+			ok := r.removePlayer(player.ID)
+			if !ok {
+				return
+			}
+
+			r.announceNewPlayer()
+		})
 		return fmt.Errorf("player loop: %w", err)
 	}
 
@@ -299,21 +322,4 @@ func (r *Room) announceNewPlayer() {
 		send(team.PlayerA)
 		send(team.PlayerB)
 	}
-}
-
-func (r *Room) errorCallback(player *Player, err error) {
-	r.log.
-		Err(err).
-		Stringer("status_code", status.Code(err)).
-		Interface("player", player).
-		Msg("tried to send message and something went wrong")
-
-	r.Do(func(r *Room) {
-		ok := r.removePlayer(player.ID)
-		if !ok {
-			return
-		}
-
-		r.announceNewPlayer()
-	})
 }
