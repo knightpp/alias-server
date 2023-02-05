@@ -105,7 +105,7 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 			PlayerB: nil,
 		}
 		r.Teams = append(r.Teams, team)
-		r.announceNewPlayer()
+		r.announceChange()
 		return nil
 	case *gamesvc.Message_JoinTeam:
 		team, ok := slices.Find(r.Teams, func(t *Team) bool {
@@ -125,9 +125,19 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 			return fmt.Errorf("TODO: team is full")
 		}
 
-		r.announceNewPlayer()
+		r.announceChange()
 		return nil
-	// case *gamesvc.
+	case *gamesvc.Message_TransferLeadership:
+		id := v.TransferLeadership.PlayerId
+		exists := r.hasPlayer(id)
+		if !exists {
+			return fmt.Errorf("could not transfer leadership: no player with id=%s", id)
+		}
+
+		r.LeaderId = id
+		r.announceChange()
+
+		return nil
 	default:
 		return fmt.Errorf("unhandled message: %T", msg.Message)
 	}
@@ -199,7 +209,7 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 
 	r.Do(func(r *Room) {
 		r.Lobby = append(r.Lobby, player)
-		r.announceNewPlayer()
+		r.announceChange()
 	})
 
 	go func() {
@@ -238,7 +248,7 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 				return
 			}
 
-			r.announceNewPlayer()
+			r.announceChange()
 		})
 		return fmt.Errorf("player loop: %w", err)
 	}
@@ -255,23 +265,27 @@ func (r *Room) Do(fn func(r *Room)) {
 
 func (r *Room) HasPlayer(playerID string) bool {
 	return runFn1(r, func(r *Room) bool {
-		for _, player := range r.Lobby {
-			if player.ID == playerID {
-				return true
-			}
-		}
-
-		for _, team := range r.Teams {
-			if team.PlayerA != nil && team.PlayerA.ID == playerID {
-				return true
-			}
-
-			if team.PlayerB != nil && team.PlayerB.ID == playerID {
-				return true
-			}
-		}
-		return false
+		return r.hasPlayer(playerID)
 	})
+}
+
+func (r *Room) hasPlayer(playerID string) bool {
+	for _, player := range r.Lobby {
+		if player.ID == playerID {
+			return true
+		}
+	}
+
+	for _, team := range r.Teams {
+		if team.PlayerA != nil && team.PlayerA.ID == playerID {
+			return true
+		}
+
+		if team.PlayerB != nil && team.PlayerB.ID == playerID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Room) removePlayer(playerID string) bool {
@@ -298,7 +312,7 @@ func (r *Room) removePlayer(playerID string) bool {
 	return changed || (oldLobbyLen != newLobbyLen)
 }
 
-func (r *Room) announceNewPlayer() {
+func (r *Room) announceChange() {
 	send := func(p *Player) {
 		if p == nil {
 			return

@@ -94,6 +94,7 @@ func TestJoin_OnePlayer(t *testing.T) {
 		},
 	}
 
+	// t.Parallel()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,16 +116,6 @@ func TestTwoPlayers(t *testing.T) {
 		{
 			name: "second player joined should correctly update",
 			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
-				g := NewGomegaWithT(t)
-				roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
-
-				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-						Message: &gamesvc.Message_UpdateRoom{
-							UpdateRoom: roomMsg,
-						},
-					}))
-				}
 			},
 		},
 		{
@@ -188,26 +179,16 @@ func TestTwoPlayers(t *testing.T) {
 			},
 		},
 		{
-			name: "transfer leadership forth and back",
+			name: "transfer leadership once",
 			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
 				g := NewGomegaWithT(t)
 				err := conn1.TransferLeadership(conn2.ID())
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				roomMsg := &gamesvc.UpdateRoom{
-					Room: &gamesvc.Room{
-						Id:        testserver.TestUUID,
-						Name:      room.Name,
-						LeaderId:  conn2.ID(),
-						IsPublic:  room.IsPublic,
-						Langugage: room.Langugage,
-						Lobby: []*gamesvc.Player{
-							conn1.Proto(), conn2.Proto(),
-						},
-						Teams: []*gamesvc.Team{},
-					},
-					Password: nil,
-				}
+				roomMsg := updateRoomReqFactory(
+					withLeader(conn2.ID()),
+					withLobby(conn1.Proto(), conn2.Proto()),
+				)
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
 					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 						Message: &gamesvc.Message_UpdateRoom{
@@ -218,6 +199,7 @@ func TestTwoPlayers(t *testing.T) {
 			},
 		},
 	}
+	// t.Parallel()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -252,6 +234,7 @@ func protoPlayer2() *gamesvc.Player {
 }
 
 func createTwoPlayers(t *testing.T) (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
+	t.Helper()
 	g := NewGomegaWithT(t)
 
 	player1 := protoPlayer1()
@@ -278,15 +261,19 @@ func createTwoPlayers(t *testing.T) (*testserver.TestPlayerInRoom, *testserver.T
 	conn2, err := p2.Join(roomID)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	// updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
-	// roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
-	// for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-	// 	g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-	// 		Message: &gamesvc.Message_UpdateRoom{
-	// 			UpdateRoom: roomMsg,
-	// 		},
-	// 	}))
-	// }
+	// Sleep to prevent socket messages to pile up that in turn causes
+	// occasional out of order packet processing.
+	time.Sleep(50 * time.Millisecond)
+
+	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
+	roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
+	for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+		g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_UpdateRoom{
+				UpdateRoom: roomMsg,
+			},
+		}))
+	}
 
 	return conn1, conn2
 }
@@ -335,40 +322,4 @@ func updateRoomRequestFactory(room *gamesvc.CreateRoomRequest, persistentOpts ..
 
 		return req
 	}
-}
-
-// asyncEventually is a magic function
-func asyncEventually(g Gomega, f func() (*gamesvc.UpdateRoom, error), timeout string) AsyncAssertion {
-	type tuple struct {
-		err error
-		msg *gamesvc.UpdateRoom
-	}
-	result := make(chan tuple)
-	close(result)
-
-	spin := func(g Gomega) {
-		result = make(chan tuple)
-		go func() {
-			defer close(result)
-
-			msg, err := f()
-			result <- tuple{msg: msg, err: err}
-		}()
-	}
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-
-	return g.Eventually(func(g Gomega) *gamesvc.UpdateRoom {
-		select {
-		case <-ticker.C:
-			return nil
-		case msg, ok := <-result:
-			if !ok {
-				spin(g)
-			}
-
-			g.Expect(msg.err).ShouldNot(HaveOccurred())
-			return msg.msg
-		}
-	}, timeout)
 }

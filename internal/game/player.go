@@ -63,7 +63,8 @@ func (p *Player) Start() error {
 
 		evt := p.log.Debug()
 		if evt.Enabled() {
-			evt.RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
+			json, _ := protojson.Marshal(msg)
+			evt.RawJSON("msg", json).Msg("received a message")
 		}
 
 		select {

@@ -37,7 +37,10 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 	t.Helper()
 
 	playerDB := memory.New()
-	log := zerolog.New(zerolog.NewTestWriter(t))
+	log := zerolog.New(zerolog.TestWriter{
+		T:     t,
+		Frame: 4,
+	})
 	gameServer := server.New(log, playerDB, constantUUIDGen{})
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -72,6 +75,8 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 }
 
 func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*TestPlayer, error) {
+	ts.t.Helper()
+
 	token := uuid.NewString()
 	err := ts.playerDB.SetPlayer(ctx, token, player)
 	if err != nil {
