@@ -19,25 +19,24 @@ type Room struct {
 	IsPublic  bool
 	Langugage string
 	Password  *string
-
-	Lobby []*Player
-	Teams []*Team
+	Lobby     []*Player
+	Teams     []*Team
 
 	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
 	actorChan  chan func(*Room)
+	done       chan struct{}
 	log        zerolog.Logger
 	gen        uuidgen.Generator
-	done       chan struct{}
 }
 
-func runFn1[T any, R1 any](actorChan chan func(T), fn func(r T) R1) R1 {
+func runFn1[R1 any](r *Room, fn func(r *Room) R1) R1 {
 	var r1 R1
 	wait := make(chan struct{})
-	actorChan <- func(r T) {
+	r.Do(func(r *Room) {
 		defer close(wait)
 
 		r1 = fn(r)
-	}
+	})
 	<-wait
 
 	return r1
@@ -50,9 +49,9 @@ func NewRoom(
 	gen uuidgen.Generator,
 ) *Room {
 	return &Room{
+		gen:        gen,
 		log:        log.With().Str("room-id", roomID).Logger(),
 		actorChan:  make(chan func(*Room)),
-		gen:        gen,
 		done:       make(chan struct{}),
 		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *Player]),
 
@@ -153,7 +152,7 @@ func (r *Room) getAllPlayers() []*Player {
 }
 
 func (r *Room) GetProto() *gamesvc.Room {
-	return runFn1(r.actorChan, func(r *Room) *gamesvc.Room {
+	return runFn1(r, func(r *Room) *gamesvc.Room {
 		return r.getProto()
 	})
 }
@@ -188,21 +187,29 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 	log := r.log.With().Str("player-id", proto.Id).Str("player-name", proto.Name).Logger()
 	player := newPlayer(log, r.gen, socket, proto)
 
-	r.actorChan <- func(r *Room) {
+	r.Do(func(r *Room) {
 		r.Lobby = append(r.Lobby, player)
 		r.announceNewPlayer()
-	}
+	})
 
 	go func() {
 		for {
 			select {
 			case <-r.done:
+				player.Cancel()
 				return
 
-			case msg := <-player.msgChan:
-				// TODO: write timeout using <-r.done
-				r.allMsgChan <- tuple.NewT2(msg, player)
-				continue
+			case msg, ok := <-player.msgChan:
+				if !ok {
+					return
+				}
+
+				select {
+				case r.allMsgChan <- tuple.NewT2(msg, player):
+					continue
+				case <-r.done:
+					return
+				}
 			}
 		}
 	}()
@@ -216,8 +223,15 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 	return nil
 }
 
+func (r *Room) Do(fn func(r *Room)) {
+	select {
+	case r.actorChan <- fn:
+	case <-r.done:
+	}
+}
+
 func (r *Room) HasPlayer(playerID string) bool {
-	return runFn1(r.actorChan, func(r *Room) bool {
+	return runFn1(r, func(r *Room) bool {
 		for _, player := range r.Lobby {
 			if player.ID == playerID {
 				return true
@@ -294,12 +308,12 @@ func (r *Room) errorCallback(player *Player, err error) {
 		Interface("player", player).
 		Msg("tried to send message and something went wrong")
 
-	r.actorChan <- func(r *Room) {
+	r.Do(func(r *Room) {
 		ok := r.removePlayer(player.ID)
 		if !ok {
 			return
 		}
 
 		r.announceNewPlayer()
-	}
+	})
 }

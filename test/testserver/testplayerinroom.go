@@ -38,7 +38,10 @@ func (ctp *TestPlayerInRoom) Start() error {
 
 func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
 	select {
-	case msg := <-ctp.C:
+	case msg, ok := <-ctp.C:
+		if !ok {
+			panic("chanel was closed")
+		}
 		return msg
 	default:
 		return nil

@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/uuidgen"
@@ -14,6 +15,8 @@ type Player struct {
 	Name        string
 	GravatarUrl string
 
+	once    sync.Once
+	done    chan struct{}
 	msgChan chan *gamesvc.Message
 	uuidGen uuidgen.Generator
 	socket  gamesvc.GameService_JoinServer
@@ -34,6 +37,7 @@ func newPlayer(
 		log:     log,
 		uuidGen: gen,
 		socket:  socket,
+		done:    make(chan struct{}),
 		msgChan: make(chan *gamesvc.Message),
 	}
 }
@@ -57,13 +61,26 @@ func (p *Player) Start() error {
 			return fmt.Errorf("socket recv: %w", err)
 		}
 
-		p.log.Debug().RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
+		evt := p.log.Debug()
+		if evt.Enabled() {
+			evt.RawJSON("msg", []byte(protojson.Format(msg))).Msg("received a message")
+		}
 
-		p.msgChan <- msg
+		select {
+		case <-p.done:
+			return nil
+		case p.msgChan <- msg:
+			continue
+		}
 	}
 }
 
-// SendMsg is a non-blocking send
+func (p *Player) Cancel() {
+	p.once.Do(func() {
+		close(p.done)
+	})
+}
+
 func (p *Player) SendMsg(msg *gamesvc.Message) error {
 	return p.socket.Send(msg)
 }

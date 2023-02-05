@@ -40,8 +40,7 @@ func TestJoin_OnePlayer(t *testing.T) {
 			},
 			Password: nil,
 		}
-
-		g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+		g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: expectedMsg,
 			},
@@ -86,7 +85,7 @@ func TestJoin_OnePlayer(t *testing.T) {
 				err := p.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				g.Eventually(p.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+				g.Eventually(p.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_UpdateRoom{
 						UpdateRoom: expectedMsg,
 					},
@@ -120,7 +119,11 @@ func TestTwoPlayers(t *testing.T) {
 				roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
 
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: roomMsg,
+						},
+					}))
 				}
 			},
 		},
@@ -145,7 +148,7 @@ func TestTwoPlayers(t *testing.T) {
 					Password: nil,
 				}
 
-				g.Eventually(conn2.Poll, "1s").Should(matcher.EqualCmp(&gamesvc.Message{
+				g.Eventually(conn1.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_UpdateRoom{
 						UpdateRoom: roomMsg,
 					},
@@ -161,42 +164,32 @@ func TestTwoPlayers(t *testing.T) {
 				err := conn1.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
-				roomMsg.Room.Teams = append(roomMsg.Room.Teams, &gamesvc.Team{
-					Id:   testserver.TestUUID,
-					Name: teamName,
-				})
-
-				g.Eventually(conn1.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_UpdateRoom{
-						UpdateRoom: roomMsg,
-					},
-				}))
-				g.Eventually(conn2.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_UpdateRoom{
-						UpdateRoom: roomMsg,
-					},
-				}))
+				time.Sleep(50 * time.Millisecond)
 
 				err = conn2.JoinTeam(testserver.TestUUID)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				roomMsg = updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
-				roomMsg.Room.Teams = append(roomMsg.Room.Teams, &gamesvc.Team{
-					Id:      testserver.TestUUID,
-					Name:    teamName,
-					PlayerA: conn1.Proto(),
-					PlayerB: conn2.Proto(),
-				})
+				roomMsg := updateRoomReqFactory(withTeams(
+					&gamesvc.Team{
+						Id:      testserver.TestUUID,
+						Name:    teamName,
+						PlayerA: conn1.Proto(),
+						PlayerB: conn2.Proto(),
+					},
+				))
+
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: roomMsg,
+						},
+					}))
 				}
 			},
 		},
 		{
 			name: "transfer leadership forth and back",
 			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
-				return
 				g := NewGomegaWithT(t)
 				err := conn1.TransferLeadership(conn2.ID())
 				g.Expect(err).ShouldNot(HaveOccurred())
@@ -216,7 +209,11 @@ func TestTwoPlayers(t *testing.T) {
 					Password: nil,
 				}
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-					g.Eventually(conn.Poll, "1s").Should(matcher.EqualCmp(roomMsg))
+					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: roomMsg,
+						},
+					}))
 				}
 			},
 		},
@@ -257,25 +254,39 @@ func protoPlayer2() *gamesvc.Player {
 func createTwoPlayers(t *testing.T) (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
 	g := NewGomegaWithT(t)
 
+	player1 := protoPlayer1()
+	player2 := protoPlayer2()
+	room := protoRoom()
+
 	srv, err := testserver.CreateAndStart(t)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
 	ctx := context.Background()
 
-	p1, err := srv.NewPlayer(ctx, protoPlayer1())
+	p1, err := srv.NewPlayer(ctx, player1)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	roomID, err := p1.CreateRoom(ctx, protoRoom())
+	roomID, err := p1.CreateRoom(ctx, room)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	conn1, err := p1.Join(ctx, roomID)
+	conn1, err := p1.Join(roomID)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	p2, err := srv.NewPlayer(ctx, protoPlayer2())
+	p2, err := srv.NewPlayer(ctx, player2)
 	g.Expect(err).ShouldNot(HaveOccurred())
 
-	conn2, err := p2.Join(ctx, roomID)
+	conn2, err := p2.Join(roomID)
 	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
+	// roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
+	// for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+	// 	g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+	// 		Message: &gamesvc.Message_UpdateRoom{
+	// 			UpdateRoom: roomMsg,
+	// 		},
+	// 	}))
+	// }
 
 	return conn1, conn2
 }

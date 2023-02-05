@@ -32,7 +32,8 @@ func (tp *TestPlayer) Proto() *gamesvc.Player {
 	return tp.player
 }
 
-func (tp *TestPlayer) Join(ctx context.Context, roomID string) (*TestPlayerInRoom, error) {
+func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
+	ctx := context.Background()
 	ctx = metadata.AppendToOutgoingContext(ctx, server.RoomIDKey, roomID, server.AuthKey, tp.authToken)
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -83,5 +84,5 @@ func (tp *TestPlayer) CreateRoomAndJoin(ctx context.Context, req *gamesvc.Create
 		return nil, fmt.Errorf("create room: %w", err)
 	}
 
-	return tp.Join(ctx, roomID)
+	return tp.Join(roomID)
 }

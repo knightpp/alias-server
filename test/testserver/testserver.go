@@ -21,7 +21,7 @@ const TestUUID = "00000000-0000-0000-0000-000000000000"
 
 type TestServer struct {
 	playerDB storage.Player
-	lis      net.Listener
+	addr     string
 	service  *server.GameService
 	log      zerolog.Logger
 	t        *testing.T
@@ -65,9 +65,9 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 	return &TestServer{
 		playerDB: playerDB,
 		service:  gameServer,
-		lis:      lis,
 		log:      log,
 		t:        t,
+		addr:     lis.Addr().String(),
 	}, nil
 }
 
@@ -78,7 +78,7 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 		return nil, fmt.Errorf("set player: %w", err)
 	}
 
-	conn, err := grpc.DialContext(ctx, ts.lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(ctx, ts.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
