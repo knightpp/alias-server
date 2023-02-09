@@ -12,10 +12,11 @@ import (
 )
 
 func TestJoin_OnePlayer(t *testing.T) {
+	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
+
 	createAndJoin := func(t *testing.T) *testserver.TestPlayerInRoom {
 		g := NewGomegaWithT(t)
-		roomReq := protoRoom()
-		playerProto := protoPlayer1()
+		playerProto, room := protoPlayer1(), protoRoom()
 
 		srv, err := testserver.CreateAndStart(t)
 		g.Expect(err).ShouldNot(HaveOccurred())
@@ -25,21 +26,10 @@ func TestJoin_OnePlayer(t *testing.T) {
 		player, err := srv.NewPlayer(ctx, playerProto)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
-		conn, err := player.CreateRoomAndJoin(ctx, roomReq)
+		conn, err := player.CreateRoomAndJoin(ctx, room)
 		g.Expect(err).ShouldNot(HaveOccurred())
 
-		expectedMsg := &gamesvc.UpdateRoom{
-			Room: &gamesvc.Room{
-				Id:        testserver.TestUUID,
-				Name:      roomReq.Name,
-				LeaderId:  playerProto.Id,
-				IsPublic:  roomReq.IsPublic,
-				Langugage: roomReq.Langugage,
-				Lobby:     []*gamesvc.Player{playerProto},
-				Teams:     []*gamesvc.Team{},
-			},
-			Password: nil,
-		}
+		expectedMsg := updFactory(withLobby(playerProto))
 		g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: expectedMsg,
@@ -63,25 +53,13 @@ func TestJoin_OnePlayer(t *testing.T) {
 			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
 				g := NewGomegaWithT(t)
 				teamName := "my super duper name"
-				roomReq, playerProto := protoRoom(), protoPlayer1()
-				expectedMsg := &gamesvc.UpdateRoom{
-					Room: &gamesvc.Room{
-						Id:        testserver.TestUUID,
-						Name:      roomReq.Name,
-						LeaderId:  playerProto.Id,
-						IsPublic:  roomReq.IsPublic,
-						Langugage: roomReq.Langugage,
-						Lobby:     []*gamesvc.Player{},
-						Teams: []*gamesvc.Team{
-							{
-								Id:      testserver.TestUUID,
-								Name:    teamName,
-								PlayerA: playerProto,
-							},
-						},
+				expectedMsg := updFactory(withTeams(
+					&gamesvc.Team{
+						Id:      testserver.TestUUID,
+						Name:    teamName,
+						PlayerA: p.Proto(),
 					},
-					Password: nil,
-				}
+				))
 				err := p.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
@@ -106,8 +84,7 @@ func TestJoin_OnePlayer(t *testing.T) {
 }
 
 func TestTwoPlayers(t *testing.T) {
-	updateRoomReqFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
-	room := protoRoom()
+	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
 
 	tests := []struct {
 		name string
@@ -124,20 +101,7 @@ func TestTwoPlayers(t *testing.T) {
 				g := NewGomegaWithT(t)
 				conn2.Cancel()
 
-				roomMsg := &gamesvc.UpdateRoom{
-					Room: &gamesvc.Room{
-						Id:        testserver.TestUUID,
-						Name:      room.Name,
-						LeaderId:  conn1.ID(),
-						IsPublic:  room.IsPublic,
-						Langugage: room.Langugage,
-						Lobby: []*gamesvc.Player{
-							conn1.Proto(),
-						},
-						Teams: []*gamesvc.Team{},
-					},
-					Password: nil,
-				}
+				roomMsg := updFactory(withLobby(conn1.Proto()))
 
 				g.Eventually(conn1.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_UpdateRoom{
@@ -160,7 +124,7 @@ func TestTwoPlayers(t *testing.T) {
 				err = conn2.JoinTeam(testserver.TestUUID)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				roomMsg := updateRoomReqFactory(withTeams(
+				roomMsg := updFactory(withTeams(
 					&gamesvc.Team{
 						Id:      testserver.TestUUID,
 						Name:    teamName,
@@ -185,8 +149,43 @@ func TestTwoPlayers(t *testing.T) {
 				err := conn1.TransferLeadership(conn2.ID())
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				roomMsg := updateRoomReqFactory(
+				roomMsg := updFactory(
 					withLeader(conn2.ID()),
+					withLobby(conn1.Proto(), conn2.Proto()),
+				)
+				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: roomMsg,
+						},
+					}))
+				}
+			},
+		},
+		{
+			name: "transfer leadership twice",
+			run: func(t *testing.T, conn1 *testserver.TestPlayerInRoom, conn2 *testserver.TestPlayerInRoom) {
+				g := NewGomegaWithT(t)
+				err := conn1.TransferLeadership(conn2.ID())
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				roomMsg := updFactory(
+					withLeader(conn2.ID()),
+					withLobby(conn1.Proto(), conn2.Proto()),
+				)
+				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+					g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: roomMsg,
+						},
+					}))
+				}
+
+				err = conn2.TransferLeadership(conn1.ID())
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				roomMsg = updFactory(
+					withLeader(conn1.ID()),
 					withLobby(conn1.Proto(), conn2.Proto()),
 				)
 				for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
