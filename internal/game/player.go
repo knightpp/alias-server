@@ -85,3 +85,13 @@ func (p *Player) Cancel() {
 func (p *Player) SendMsg(msg *gamesvc.Message) error {
 	return p.socket.Send(msg)
 }
+
+func (p *Player) SendError(err string) error {
+	return p.SendMsg(&gamesvc.Message{
+		Message: &gamesvc.Message_Error{
+			Error: &gamesvc.MsgError{
+				Error: err,
+			},
+		},
+	})
+}

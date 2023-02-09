@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/onsi/gomega"
 )
 
 type TestPlayerInRoom struct {
@@ -38,15 +37,37 @@ func (ctp *TestPlayerInRoom) Start() error {
 	}
 }
 
-func (ctp *TestPlayerInRoom) Poll(g gomega.Gomega) *gamesvc.Message {
+func (ctp *TestPlayerInRoom) Next() *gamesvc.Message {
+	msg, ok := <-ctp.C
+	if !ok {
+		panic("channel was closed")
+	}
+
+	return msg
+}
+
+func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
 	select {
 	case msg, ok := <-ctp.C:
 		if !ok {
-			panic("chanel was closed")
+			panic("channel was closed")
 		}
 
 		if msg, ok := msg.Message.(*gamesvc.Message_Error); ok {
-			g.Expect(msg.Error.Error).To(gomega.BeNil())
+			panic(msg.Error.Error)
+		}
+
+		return msg
+	default:
+		return nil
+	}
+}
+
+func (ctp *TestPlayerInRoom) PollRaw() *gamesvc.Message {
+	select {
+	case msg, ok := <-ctp.C:
+		if !ok {
+			panic("channel was closed")
 		}
 
 		return msg
@@ -100,6 +121,14 @@ func (tpr *TestPlayerInRoom) TransferLeadership(playerID string) error {
 			TransferLeadership: &gamesvc.MsgTransferLeadership{
 				PlayerId: playerID,
 			},
+		},
+	})
+}
+
+func (tpr *TestPlayerInRoom) StartGame() error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_Start{
+			Start: &gamesvc.MsgStart{},
 		},
 	})
 }

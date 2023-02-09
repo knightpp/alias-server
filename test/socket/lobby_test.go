@@ -3,15 +3,16 @@ package socket_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	"github.com/knightpp/alias-server/internal/game"
 	"github.com/knightpp/alias-server/internal/testutil/matcher"
 	"github.com/knightpp/alias-server/internal/testutil/testserver"
 	. "github.com/onsi/gomega"
 )
 
 func TestJoin_OnePlayer(t *testing.T) {
+	t.Parallel()
 	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
 
 	createAndJoin := func(t *testing.T) *testserver.TestPlayerInRoom {
@@ -70,9 +71,26 @@ func TestJoin_OnePlayer(t *testing.T) {
 				}))
 			},
 		},
+		{
+			name: "start game when no teams",
+			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
+				g := NewGomegaWithT(t)
+
+				err := p.StartGame()
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				expectedErr := &game.UnknownMessageTypeError{T: &gamesvc.Message_Start{}}
+				g.Eventually(p.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_Error{
+						Error: &gamesvc.MsgError{
+							Error: expectedErr.Error(),
+						},
+					},
+				}))
+			},
+		},
 	}
 
-	// t.Parallel()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,6 +102,7 @@ func TestJoin_OnePlayer(t *testing.T) {
 }
 
 func TestTwoPlayers(t *testing.T) {
+	t.Parallel()
 	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
 
 	tests := []struct {
@@ -119,7 +138,20 @@ func TestTwoPlayers(t *testing.T) {
 				err := conn1.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				time.Sleep(50 * time.Millisecond)
+				g.Expect(conn1.Next()).Should(matcher.EqualCmp(
+					&gamesvc.Message{
+						Message: &gamesvc.Message_UpdateRoom{
+							UpdateRoom: updFactory(
+								withLobby(conn2.Proto()),
+								withTeams(&gamesvc.Team{
+									Id:      testserver.TestUUID,
+									Name:    teamName,
+									PlayerA: conn1.Proto(),
+								}),
+							),
+						},
+					},
+				))
 
 				err = conn2.JoinTeam(testserver.TestUUID)
 				g.Expect(err).ShouldNot(HaveOccurred())
@@ -198,7 +230,6 @@ func TestTwoPlayers(t *testing.T) {
 			},
 		},
 	}
-	// t.Parallel()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -262,7 +293,7 @@ func createTwoPlayers(t *testing.T) (*testserver.TestPlayerInRoom, *testserver.T
 
 	// Sleep to prevent socket messages to pile up that in turn causes
 	// occasional out of order packet processing.
-	time.Sleep(50 * time.Millisecond)
+	// time.Sleep(50 * time.Millisecond)
 
 	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
 	roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))

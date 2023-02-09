@@ -68,15 +68,11 @@ func (r *Room) Start() {
 	for {
 		select {
 		case tuple := <-r.allMsgChan:
-			err := r.handleMessage(tuple.A, tuple.B)
+			msg, player := tuple.A, tuple.B
+
+			err := r.handleMessage(msg, player)
 			if err != nil {
-				_ = tuple.B.SendMsg(&gamesvc.Message{
-					Message: &gamesvc.Message_Error{
-						Error: &gamesvc.MsgError{
-							Error: fmt.Sprintf("handle message: %s", err),
-						},
-					},
-				})
+				_ = player.SendError(err.Error())
 			}
 
 		case fn := <-r.actorChan:
@@ -139,7 +135,7 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 
 		return nil
 	default:
-		return fmt.Errorf("unhandled message: %T", msg.Message)
+		return &UnknownMessageTypeError{T: msg.Message}
 	}
 }
 
@@ -336,4 +332,12 @@ func (r *Room) announceChange() {
 		send(team.PlayerA)
 		send(team.PlayerB)
 	}
+}
+
+type UnknownMessageTypeError struct {
+	T any
+}
+
+func (err *UnknownMessageTypeError) Error() string {
+	return fmt.Sprintf("unhandled message: %T", err.T)
 }
