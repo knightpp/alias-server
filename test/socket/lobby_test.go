@@ -6,8 +6,8 @@ import (
 	"time"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/knightpp/alias-server/test/matcher"
-	"github.com/knightpp/alias-server/test/testserver"
+	"github.com/knightpp/alias-server/internal/testutil/matcher"
+	"github.com/knightpp/alias-server/internal/testutil/testserver"
 	. "github.com/onsi/gomega"
 )
 
