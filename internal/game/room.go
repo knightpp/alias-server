@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"fmt"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -12,15 +13,22 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var (
+	ErrStartNoTeams        = errors.New("cannot start game without a single team")
+	ErrStartIncompleteTeam = errors.New("cannot start game with incomplete team")
+)
+
 type Room struct {
-	Id        string
-	Name      string
-	LeaderId  string
-	IsPublic  bool
-	Langugage string
-	Password  *string
-	Lobby     []*Player
-	Teams     []*Team
+	Id           string
+	Name         string
+	LeaderId     string
+	IsPublic     bool
+	Langugage    string
+	Password     *string
+	Lobby        []*Player
+	Teams        []*Team
+	IsPlaying    bool
+	PlayerIDTurn string
 
 	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
 	actorChan  chan func(*Room)
@@ -134,9 +142,51 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 		r.announceChange()
 
 		return nil
+	case *gamesvc.Message_StartGame:
+		if r.LeaderId != p.ID {
+			return errors.New("only leader id can start game")
+		}
+
+		if len(r.Teams) == 0 {
+			return ErrStartNoTeams
+		}
+		for _, team := range r.Teams {
+			if team.PlayerA == nil || team.PlayerB == nil {
+				return ErrStartIncompleteTeam
+			}
+		}
+
+		firstTeam := r.Teams[0]
+		switch {
+		case firstTeam.PlayerA != nil:
+			r.PlayerIDTurn = firstTeam.PlayerA.ID
+		case firstTeam.PlayerB != nil:
+			r.PlayerIDTurn = firstTeam.PlayerB.ID
+		default:
+			return errors.New("no players in the first team")
+		}
+
+		r.IsPlaying = true
+
+		r.announceChange()
+
+		return nil
 	default:
 		return &UnknownMessageTypeError{T: msg.Message}
 	}
+}
+
+func (r *Room) findTeamOfPlayer(id string) *Team {
+	for _, team := range r.Teams {
+		if team.PlayerA != nil && team.PlayerA.ID == id {
+			return team
+		}
+
+		if team.PlayerB != nil && team.PlayerB.ID == id {
+			return team
+		}
+	}
+	return nil
 }
 
 func (r *Room) getAllPlayers() []*Player {
@@ -185,18 +235,16 @@ func (r *Room) getProto() *gamesvc.Room {
 	}
 
 	return &gamesvc.Room{
-		Id:        r.Id,
-		Name:      r.Name,
-		LeaderId:  r.LeaderId,
-		IsPublic:  r.IsPublic,
-		Langugage: r.Langugage,
-		Lobby:     lobby,
-		Teams:     teams,
+		Id:           r.Id,
+		Name:         r.Name,
+		LeaderId:     r.LeaderId,
+		IsPublic:     r.IsPublic,
+		Langugage:    r.Langugage,
+		Lobby:        lobby,
+		Teams:        teams,
+		IsPlaying:    r.IsPlaying,
+		PlayerIdTurn: r.PlayerIDTurn,
 	}
-}
-
-func (r *Room) getLobbyProto() []*gamesvc.Player {
-	return nil
 }
 
 func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *gamesvc.Player) error {

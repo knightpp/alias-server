@@ -79,7 +79,38 @@ func TestJoin_OnePlayer(t *testing.T) {
 				err := p.StartGame()
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				expectedErr := &game.UnknownMessageTypeError{T: &gamesvc.Message_Start{}}
+				expectedErr := game.ErrStartNoTeams
+				g.Eventually(p.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_Error{
+						Error: &gamesvc.MsgError{
+							Error: expectedErr.Error(),
+						},
+					},
+				}))
+			},
+		},
+		{
+			name: "start game when incomplete team",
+			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
+				g := NewGomegaWithT(t)
+
+				err := p.CreateTeam("super team")
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				g.Expect(p.NextMsg()).To(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: updFactory(withTeams(&gamesvc.Team{
+							Id:      testserver.TestUUID,
+							Name:    "super team",
+							PlayerA: p.Proto(),
+						})),
+					},
+				}))
+
+				err = p.StartGame()
+				g.Expect(err).ShouldNot(HaveOccurred())
+
+				expectedErr := game.ErrStartIncompleteTeam
 				g.Eventually(p.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_Error{
 						Error: &gamesvc.MsgError{
@@ -138,7 +169,7 @@ func TestTwoPlayers(t *testing.T) {
 				err := conn1.CreateTeam(teamName)
 				g.Expect(err).ShouldNot(HaveOccurred())
 
-				g.Expect(conn1.Next()).Should(matcher.EqualCmp(
+				g.Expect(conn1.NextMsg()).Should(matcher.EqualCmp(
 					&gamesvc.Message{
 						Message: &gamesvc.Message_UpdateRoom{
 							UpdateRoom: updFactory(

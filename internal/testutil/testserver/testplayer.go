@@ -20,7 +20,6 @@ type TestPlayer struct {
 }
 
 func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string, t *testing.T) *TestPlayer {
-	t.Helper()
 	return &TestPlayer{
 		client:    client,
 		authToken: auth,
@@ -30,12 +29,10 @@ func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, aut
 }
 
 func (tp *TestPlayer) Proto() *gamesvc.Player {
-	tp.t.Helper()
 	return tp.player
 }
 
 func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
-	tp.t.Helper()
 	ctx := context.Background()
 	ctx = metadata.AppendToOutgoingContext(ctx, server.RoomIDKey, roomID, server.AuthKey, tp.authToken)
 	ctx, cancel := context.WithCancel(ctx)
@@ -71,7 +68,6 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 }
 
 func (tp *TestPlayer) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRequest) (string, error) {
-	tp.t.Helper()
 	ctx = metadata.AppendToOutgoingContext(ctx, server.AuthKey, tp.authToken)
 
 	resp, err := tp.client.CreateRoom(ctx, req)
@@ -83,7 +79,6 @@ func (tp *TestPlayer) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomReq
 }
 
 func (tp *TestPlayer) CreateRoomAndJoin(ctx context.Context, req *gamesvc.CreateRoomRequest) (*TestPlayerInRoom, error) {
-	tp.t.Helper()
 	roomID, err := tp.CreateRoom(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("create room: %w", err)

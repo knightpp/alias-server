@@ -37,7 +37,7 @@ func (ctp *TestPlayerInRoom) Start() error {
 	}
 }
 
-func (ctp *TestPlayerInRoom) Next() *gamesvc.Message {
+func (ctp *TestPlayerInRoom) NextMsg() *gamesvc.Message {
 	msg, ok := <-ctp.C
 	if !ok {
 		panic("channel was closed")
@@ -127,8 +127,8 @@ func (tpr *TestPlayerInRoom) TransferLeadership(playerID string) error {
 
 func (tpr *TestPlayerInRoom) StartGame() error {
 	return tpr.sock.Send(&gamesvc.Message{
-		Message: &gamesvc.Message_Start{
-			Start: &gamesvc.MsgStart{},
+		Message: &gamesvc.Message_StartGame{
+			StartGame: &gamesvc.MsgStartGame{},
 		},
 	})
 }

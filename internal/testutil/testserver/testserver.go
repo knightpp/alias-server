@@ -34,8 +34,6 @@ func (c constantUUIDGen) NewString() string {
 }
 
 func CreateAndStart(t *testing.T) (*TestServer, error) {
-	t.Helper()
-
 	playerDB := memory.New()
 	log := zerolog.New(zerolog.TestWriter{
 		T:     t,
