@@ -4,11 +4,11 @@ package testserver
 import (
 	"context"
 	"fmt"
-	"testing"
 
 	clone "github.com/huandu/go-clone/generic"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/server"
+	"github.com/onsi/ginkgo/v2"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -16,15 +16,13 @@ type TestPlayer struct {
 	authToken string
 	player    *gamesvc.Player
 	client    gamesvc.GameServiceClient
-	t         *testing.T
 }
 
-func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string, t *testing.T) *TestPlayer {
+func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string) *TestPlayer {
 	return &TestPlayer{
 		client:    client,
 		authToken: auth,
 		player:    clone.Clone(player),
-		t:         t,
 	}
 }
 
@@ -52,7 +50,7 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 		cancel:    cancel,
 	}
 
-	tp.t.Cleanup(func() {
+	ginkgo.DeferCleanup(func() {
 		playerInRoom.Cancel()
 	})
 

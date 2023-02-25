@@ -5,10 +5,12 @@ import (
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	. "github.com/onsi/gomega"
 )
 
 type TestPlayerInRoom struct {
-	C chan *gamesvc.Message
+	C         chan *gamesvc.Message
+	RoomState *gamesvc.Room
 
 	sock      gamesvc.GameService_JoinClient
 	authToken string
@@ -43,10 +45,21 @@ func (ctp *TestPlayerInRoom) NextMsg() *gamesvc.Message {
 		panic("channel was closed")
 	}
 
+	ctp.setRoomState(msg)
+
 	return msg
 }
 
-func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
+func (ctp *TestPlayerInRoom) setRoomState(msg *gamesvc.Message) {
+	state, ok := msg.Message.(*gamesvc.Message_UpdateRoom)
+	if !ok {
+		return
+	}
+
+	ctp.RoomState = state.UpdateRoom.Room
+}
+
+func (ctp *TestPlayerInRoom) Poll(g Gomega) *gamesvc.Message {
 	select {
 	case msg, ok := <-ctp.C:
 		if !ok {
@@ -55,8 +68,10 @@ func (ctp *TestPlayerInRoom) Poll() *gamesvc.Message {
 
 		if msg, ok := msg.Message.(*gamesvc.Message_Error); ok {
 			panic(msg.Error.Error)
+			// g.ExpectWithOffset(1, msg.Error.Error).Should(BeEmpty())
 		}
 
+		ctp.setRoomState(msg)
 		return msg
 	default:
 		return nil
@@ -70,6 +85,7 @@ func (ctp *TestPlayerInRoom) PollRaw() *gamesvc.Message {
 			panic("channel was closed")
 		}
 
+		ctp.setRoomState(msg)
 		return msg
 	default:
 		return nil

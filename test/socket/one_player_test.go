@@ -2,132 +2,104 @@ package socket_test
 
 import (
 	"context"
-	"testing"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/game"
 	"github.com/knightpp/alias-server/internal/testutil/matcher"
 	"github.com/knightpp/alias-server/internal/testutil/testserver"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-func TestJoin_OnePlayer(t *testing.T) {
-	t.Parallel()
+var _ = Describe("OnePlayer", func() {
 	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
 
-	createAndJoin := func(t *testing.T) *testserver.TestPlayerInRoom {
-		g := NewGomegaWithT(t)
+	var conn *testserver.TestPlayerInRoom
+	BeforeEach(func() {
 		playerProto, room := protoPlayer1(), protoRoom()
 
-		srv, err := testserver.CreateAndStart(t)
-		g.Expect(err).ShouldNot(HaveOccurred())
+		srv, err := testserver.CreateAndStart()
+		Expect(err).ShouldNot(HaveOccurred())
 
 		ctx := context.Background()
 
 		player, err := srv.NewPlayer(ctx, playerProto)
-		g.Expect(err).ShouldNot(HaveOccurred())
+		Expect(err).ShouldNot(HaveOccurred())
 
-		conn, err := player.CreateRoomAndJoin(ctx, room)
-		g.Expect(err).ShouldNot(HaveOccurred())
+		connLocal, err := player.CreateRoomAndJoin(ctx, room)
+		Expect(err).ShouldNot(HaveOccurred())
 
 		expectedMsg := updFactory(withLobby(playerProto))
-		g.Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+		Eventually(connLocal.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: expectedMsg,
 			},
 		}))
 
-		return conn
-	}
+		conn = connLocal
+	})
 
-	tests := []struct {
-		name string
-		fn   func(t *testing.T, p *testserver.TestPlayerInRoom)
-	}{
-		{
-			name: "first message is UpdateRoom",
-			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
+	It("first message is UpdateRoom", func() {
+
+	})
+
+	It("create team", func() {
+		teamName := "my super duper name"
+		expectedMsg := updFactory(withTeams(
+			&gamesvc.Team{
+				Id:      testserver.TestUUID,
+				Name:    teamName,
+				PlayerA: conn.Proto(),
 			},
-		},
-		{
-			name: "create team",
-			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
-				g := NewGomegaWithT(t)
-				teamName := "my super duper name"
-				expectedMsg := updFactory(withTeams(
-					&gamesvc.Team{
-						Id:      testserver.TestUUID,
-						Name:    teamName,
-						PlayerA: p.Proto(),
-					},
-				))
-				err := p.CreateTeam(teamName)
-				g.Expect(err).ShouldNot(HaveOccurred())
+		))
+		err := conn.CreateTeam(teamName)
+		Expect(err).ShouldNot(HaveOccurred())
 
-				g.Eventually(p.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_UpdateRoom{
-						UpdateRoom: expectedMsg,
-					},
-				}))
+		Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_UpdateRoom{
+				UpdateRoom: expectedMsg,
 			},
-		},
-		{
-			name: "start game when no teams",
-			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
-				g := NewGomegaWithT(t)
+		}))
+	})
 
-				err := p.StartGame()
-				g.Expect(err).ShouldNot(HaveOccurred())
+	It("start game when no teams", func() {
+		err := conn.StartGame()
+		Expect(err).ShouldNot(HaveOccurred())
 
-				expectedErr := game.ErrStartNoTeams
-				g.Eventually(p.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_Error{
-						Error: &gamesvc.MsgError{
-							Error: expectedErr.Error(),
-						},
-					},
-				}))
+		expectedErr := game.ErrStartNoTeams
+		Eventually(conn.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_Error{
+				Error: &gamesvc.MsgError{
+					Error: expectedErr.Error(),
+				},
 			},
-		},
-		{
-			name: "start game when incomplete team",
-			fn: func(t *testing.T, p *testserver.TestPlayerInRoom) {
-				g := NewGomegaWithT(t)
+		}))
+	})
 
-				err := p.CreateTeam("super team")
-				g.Expect(err).ShouldNot(HaveOccurred())
+	It("start game when incomplete team", func() {
+		err := conn.CreateTeam("super team")
+		Expect(err).ShouldNot(HaveOccurred())
 
-				g.Expect(p.NextMsg()).To(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_UpdateRoom{
-						UpdateRoom: updFactory(withTeams(&gamesvc.Team{
-							Id:      testserver.TestUUID,
-							Name:    "super team",
-							PlayerA: p.Proto(),
-						})),
-					},
-				}))
-
-				err = p.StartGame()
-				g.Expect(err).ShouldNot(HaveOccurred())
-
-				expectedErr := game.ErrStartIncompleteTeam
-				g.Eventually(p.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
-					Message: &gamesvc.Message_Error{
-						Error: &gamesvc.MsgError{
-							Error: expectedErr.Error(),
-						},
-					},
-				}))
+		Expect(conn.NextMsg()).To(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_UpdateRoom{
+				UpdateRoom: updFactory(withTeams(&gamesvc.Team{
+					Id:      testserver.TestUUID,
+					Name:    "super team",
+					PlayerA: conn.Proto(),
+				})),
 			},
-		},
-	}
+		}))
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			conn := createAndJoin(t)
+		err = conn.StartGame()
+		Expect(err).ShouldNot(HaveOccurred())
 
-			tt.fn(t, conn)
-		})
-	}
-}
+		expectedErr := game.ErrStartIncompleteTeam
+		Eventually(conn.PollRaw).Should(matcher.EqualCmp(&gamesvc.Message{
+			Message: &gamesvc.Message_Error{
+				Error: &gamesvc.MsgError{
+					Error: expectedErr.Error(),
+				},
+			},
+		}))
+	})
+})

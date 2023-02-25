@@ -5,13 +5,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"testing"
 
 	"github.com/google/uuid"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/server"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/memory"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,7 +24,6 @@ type TestServer struct {
 	addr     string
 	service  *server.GameService
 	log      zerolog.Logger
-	t        *testing.T
 }
 
 type constantUUIDGen struct{}
@@ -33,10 +32,10 @@ func (c constantUUIDGen) NewString() string {
 	return TestUUID
 }
 
-func CreateAndStart(t *testing.T) (*TestServer, error) {
+func CreateAndStart() (*TestServer, error) {
 	playerDB := memory.New()
 	log := zerolog.New(zerolog.TestWriter{
-		T:     t,
+		T:     GinkgoT(),
 		Frame: 4,
 	})
 	gameServer := server.New(log, playerDB, constantUUIDGen{})
@@ -55,7 +54,7 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 		_ = grpcServer.Serve(lis)
 	}()
 
-	t.Cleanup(func() {
+	DeferCleanup(func() {
 		grpcServer.GracefulStop()
 		err := lis.Close()
 		if err != nil {
@@ -67,14 +66,11 @@ func CreateAndStart(t *testing.T) (*TestServer, error) {
 		playerDB: playerDB,
 		service:  gameServer,
 		log:      log,
-		t:        t,
 		addr:     lis.Addr().String(),
 	}, nil
 }
 
 func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*TestPlayer, error) {
-	ts.t.Helper()
-
 	token := uuid.NewString()
 	err := ts.playerDB.SetPlayer(ctx, token, player)
 	if err != nil {
@@ -88,5 +84,5 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 
 	client := gamesvc.NewGameServiceClient(conn)
 
-	return newTestPlayer(client, player, token, ts.t), nil
+	return newTestPlayer(client, player, token), nil
 }
