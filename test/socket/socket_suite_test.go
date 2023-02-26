@@ -1,4 +1,4 @@
-package integration_test
+package socket_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestIntegration(t *testing.T) {
+func TestSocket(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Suite")
+	RunSpecs(t, "Socket Suite")
 }
