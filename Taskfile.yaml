@@ -21,7 +21,7 @@ tasks:
 
   test:
     cmds:
-      - ginkgo run --tags test -p --fail-fast --randomize-all -r ./test/
+      - ginkgo run --tags test -p --fail-fast --randomize-all -r {{.CLI_ARGS}} ./test/
       #- go test -tags test -timeout 5s -race {{.CLI_ARGS}} ./...
 
   cover:

@@ -105,7 +105,7 @@ var _ = Describe("TwoPlayer", func() {
 			withLobby(conn1.Proto(), conn2.Proto()),
 		)
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},
@@ -121,7 +121,7 @@ var _ = Describe("TwoPlayer", func() {
 			withLobby(conn1.Proto(), conn2.Proto()),
 		)
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},

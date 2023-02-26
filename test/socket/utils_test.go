@@ -36,39 +36,41 @@ func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInR
 	player1 := protoPlayer1()
 	player2 := protoPlayer2()
 	room := protoRoom()
+	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
 
 	srv, err := testserver.CreateAndStart()
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	ctx := context.Background()
 
 	p1, err := srv.NewPlayer(ctx, player1)
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	roomID, err := p1.CreateRoom(ctx, room)
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	conn1, err := p1.Join(roomID)
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
+
+	ExpectWithOffset(1, conn1.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
+		Message: &gamesvc.Message_UpdateRoom{
+			UpdateRoom: updateRoomReqFactory(withLobby(player1)),
+		},
+	}))
 
 	p2, err := srv.NewPlayer(ctx, player2)
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
 	conn2, err := p2.Join(roomID)
-	Expect(err).ShouldNot(HaveOccurred())
+	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
-	// Sleep to prevent socket messages to pile up that in turn causes
-	// occasional out of order packet processing.
-	// time.Sleep(50 * time.Millisecond)
-
-	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
-	roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
+	match := matcher.EqualCmp(&gamesvc.Message{
+		Message: &gamesvc.Message_UpdateRoom{
+			UpdateRoom: updateRoomReqFactory(withLobby(player1, player2)),
+		},
+	})
 	for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-		EventuallyWithOffset(1, conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: roomMsg,
-			},
-		}))
+		ExpectWithOffset(1, conn.NextMsg()).Should(match)
 	}
 
 	return conn1, conn2
