@@ -84,5 +84,9 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 
 	client := gamesvc.NewGameServiceClient(conn)
 
-	return newTestPlayer(client, player, token), nil
+	log := ts.log.With().
+		Str("player.name", player.Name).
+		Str("player.id", player.Id).
+		Logger()
+	return newTestPlayer(client, player, token, log), nil
 }

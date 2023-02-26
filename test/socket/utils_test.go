@@ -64,7 +64,7 @@ func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInR
 	updateRoomReqFactory := updateRoomRequestFactory(room, withLeader(player1.Id))
 	roomMsg := updateRoomReqFactory(withLobby(conn1.Proto(), conn2.Proto()))
 	for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-		Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+		EventuallyWithOffset(1, conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: roomMsg,
 			},
@@ -80,21 +80,24 @@ func each(fn func(conn *testserver.TestPlayerInRoom), players ...*testserver.Tes
 	}
 }
 
-func createTwoPlayersInATeam(teamName string) (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
-	conn1, conn2 := createTwoPlayers()
-
+func joinSameTeam(
+	teamName string,
+	conn1, conn2 *testserver.TestPlayerInRoom,
+) {
 	err := conn1.CreateTeam(teamName)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	updMsg, ok := conn1.NextMsg().Message.(*gamesvc.Message_UpdateRoom)
 	Expect(ok).To(BeTrue())
 
-	err = conn2.JoinTeam(updMsg.UpdateRoom.Room.Teams[0].Id)
+	teamID := updMsg.UpdateRoom.Room.Teams[0].Id
+
+	err = conn2.JoinTeam(teamID)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	updateRoomReqFactory := updateRoomRequestFactory(protoRoom(), withLeader(conn1.ID()))
 	roomMsg := updateRoomReqFactory(withTeams(&gamesvc.Team{
-		Id:      "",
+		Id:      teamID,
 		Name:    teamName,
 		PlayerA: conn1.Proto(),
 		PlayerB: conn2.Proto(),
@@ -107,8 +110,6 @@ func createTwoPlayersInATeam(teamName string) (*testserver.TestPlayerInRoom, *te
 			},
 		}))
 	}, conn1, conn2)
-
-	return conn1, conn2
 }
 
 type updateRoomOption func(*gamesvc.UpdateRoom)

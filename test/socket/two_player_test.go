@@ -129,19 +129,27 @@ var _ = Describe("TwoPlayer", func() {
 		}
 	})
 
-	It("successfully start game", func() {
-		return
-		err := conn1.StartGame()
-		Expect(err).ShouldNot(HaveOccurred())
+	Describe("in a team", func() {
+		const teamName = "our team"
 
-		updMsg := updFactory(withIsPlaying(true), withPlayerIDTurn(conn1.ID()))
+		BeforeEach(func() {
+			joinSameTeam(teamName, conn1, conn2)
+		})
 
-		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-				Message: &gamesvc.Message_UpdateRoom{
-					UpdateRoom: updMsg,
-				},
-			}))
-		}
+		FIt("successfully start game", func() {
+			By("start game")
+			err := conn1.StartGame()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			updMsg := updFactory(withIsPlaying(true), withPlayerIDTurn(conn1.ID()))
+
+			for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
+				Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+					Message: &gamesvc.Message_UpdateRoom{
+						UpdateRoom: updMsg,
+					},
+				}))
+			}
+		})
 	})
 })

@@ -1,16 +1,17 @@
 package testserver
 
 import (
-	"fmt"
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog"
 )
 
 type TestPlayerInRoom struct {
 	C         chan *gamesvc.Message
 	RoomState *gamesvc.Room
+	logger    zerolog.Logger
 
 	sock      gamesvc.GameService_JoinClient
 	authToken string
@@ -25,7 +26,7 @@ func (ctp *TestPlayerInRoom) Start() error {
 	for {
 		msg, err := ctp.sock.Recv()
 		if err != nil {
-			return fmt.Errorf("recv msg: %w", err)
+			return err
 		}
 
 		select {
@@ -34,6 +35,7 @@ func (ctp *TestPlayerInRoom) Start() error {
 			return nil
 
 		case ctp.C <- msg:
+			ctp.logger.Info().Type("msg.type", msg.Message).Msg("received a message")
 			continue
 		}
 	}

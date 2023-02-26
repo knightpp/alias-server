@@ -9,20 +9,31 @@ import (
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/server"
 	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 type TestPlayer struct {
 	authToken string
 	player    *gamesvc.Player
 	client    gamesvc.GameServiceClient
+	log       zerolog.Logger
 }
 
-func newTestPlayer(client gamesvc.GameServiceClient, player *gamesvc.Player, auth string) *TestPlayer {
+func newTestPlayer(
+	client gamesvc.GameServiceClient,
+	player *gamesvc.Player,
+	auth string,
+	log zerolog.Logger,
+) *TestPlayer {
 	return &TestPlayer{
 		client:    client,
 		authToken: auth,
 		player:    clone.Clone(player),
+		log:       log,
 	}
 }
 
@@ -44,6 +55,7 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 	playerInRoom := &TestPlayerInRoom{
 		done:      make(chan struct{}),
 		C:         make(chan *gamesvc.Message),
+		logger:    tp.log.With().Str("room.id", roomID).Logger(),
 		sock:      sock,
 		authToken: tp.authToken,
 		player:    tp.player,
@@ -55,11 +67,14 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 	})
 
 	go func() {
+		defer ginkgo.GinkgoRecover()
+
 		err := playerInRoom.Start()
-		if err != nil {
-			// TODO: Fail
-			// tp.t.Fail()
+		if status.Code(err) == codes.Canceled {
+			return
 		}
+
+		Expect(err).ShouldNot(HaveOccurred())
 	}()
 
 	return playerInRoom, nil
