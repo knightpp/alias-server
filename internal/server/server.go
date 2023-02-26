@@ -7,16 +7,12 @@ import (
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	"github.com/knightpp/alias-proto/go/mdkey"
 	"github.com/knightpp/alias-server/internal/game"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
-)
-
-const (
-	AuthKey   = "token"
-	RoomIDKey = "room-id"
 )
 
 var _ gamesvc.GameServiceServer = (*GameService)(nil)
@@ -91,12 +87,12 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	md, _ := metadata.FromIncomingContext(ctx)
 
-	roomID, err := singleFieldMD(RoomIDKey, md)
+	roomID, err := singleFieldMD(mdkey.RoomID, md)
 	if err != nil {
 		return fmt.Errorf("get room id from md: %w", err)
 	}
 
-	authToken, err := singleFieldMD(AuthKey, md)
+	authToken, err := singleFieldMD(mdkey.Auth, md)
 	if err != nil {
 		return fmt.Errorf("get auth token from md: %w", err)
 	}
