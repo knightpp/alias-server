@@ -7,7 +7,7 @@ import (
 
 	clone "github.com/huandu/go-clone/generic"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/knightpp/alias-server/internal/server"
+	"github.com/knightpp/alias-proto/go/mdkey"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rs/zerolog"
@@ -43,7 +43,7 @@ func (tp *TestPlayer) Proto() *gamesvc.Player {
 
 func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 	ctx := context.Background()
-	ctx = metadata.AppendToOutgoingContext(ctx, server.RoomIDKey, roomID, server.AuthKey, tp.authToken)
+	ctx = metadata.AppendToOutgoingContext(ctx, mdkey.RoomID, roomID, mdkey.Auth, tp.authToken)
 	ctx, cancel := context.WithCancel(ctx)
 
 	sock, err := tp.client.Join(ctx)
@@ -81,7 +81,7 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 }
 
 func (tp *TestPlayer) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRequest) (string, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, server.AuthKey, tp.authToken)
+	ctx = metadata.AppendToOutgoingContext(ctx, mdkey.Auth, tp.authToken)
 
 	resp, err := tp.client.CreateRoom(ctx, req)
 	if err != nil {
