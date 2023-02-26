@@ -32,7 +32,7 @@ func protoPlayer2() *gamesvc.Player {
 	}
 }
 
-func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
+func createTwoPlayers(ctx context.Context) (*testserver.TestPlayerInRoom, *testserver.TestPlayerInRoom) {
 	player1 := protoPlayer1()
 	player2 := protoPlayer2()
 	room := protoRoom()
@@ -40,8 +40,6 @@ func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInR
 
 	srv, err := testserver.CreateAndStart()
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
-
-	ctx := context.Background()
 
 	p1, err := srv.NewPlayer(ctx, player1)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
@@ -52,7 +50,7 @@ func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInR
 	conn1, err := p1.Join(roomID)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
-	ExpectWithOffset(1, conn1.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
+	ExpectWithOffset(1, conn1.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 		Message: &gamesvc.Message_UpdateRoom{
 			UpdateRoom: updateRoomReqFactory(withLobby(player1)),
 		},
@@ -70,7 +68,7 @@ func createTwoPlayers() (*testserver.TestPlayerInRoom, *testserver.TestPlayerInR
 		},
 	})
 	for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-		ExpectWithOffset(1, conn.NextMsg()).Should(match)
+		ExpectWithOffset(1, conn.NextMsg(ctx)).Should(match)
 	}
 
 	return conn1, conn2
@@ -83,13 +81,14 @@ func each(fn func(conn *testserver.TestPlayerInRoom), players ...*testserver.Tes
 }
 
 func joinSameTeam(
+	ctx context.Context,
 	teamName string,
 	conn1, conn2 *testserver.TestPlayerInRoom,
 ) {
 	err := conn1.CreateTeam(teamName)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	updMsg, ok := conn1.NextMsg().Message.(*gamesvc.Message_UpdateRoom)
+	updMsg, ok := conn1.NextMsg(ctx).Message.(*gamesvc.Message_UpdateRoom)
 	Expect(ok).To(BeTrue())
 
 	teamID := updMsg.UpdateRoom.Room.Teams[0].Id

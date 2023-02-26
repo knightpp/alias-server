@@ -15,33 +15,30 @@ var _ = Describe("TwoPlayer", func() {
 		conn1 *testserver.TestPlayerInRoom
 		conn2 *testserver.TestPlayerInRoom
 	)
-	BeforeEach(func() {
-		conn1, conn2 = createTwoPlayers()
+	BeforeEach(func(ctx SpecContext) {
+		conn1, conn2 = createTwoPlayers(ctx)
 	})
 
-	It("second player joined should correctly update", func() {
-
-	})
-
-	It("second player left", func() {
+	It("second player left", func(ctx SpecContext) {
 		conn2.Cancel()
 
 		roomMsg := updFactory(withLobby(conn1.Proto()))
 
-		Eventually(conn1.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+		Expect(conn1.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: roomMsg,
 			},
 		}))
+		Expect(conn2.StartGame()).Should(HaveOccurred())
 	})
 
-	It("second player join team", func() {
+	It("second player join team", func(ctx SpecContext) {
 		const teamName = "team-1"
 		By("create team")
 		err := conn1.CreateTeam(teamName)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(conn1.NextMsg()).Should(matcher.EqualCmp(
+		match := matcher.EqualCmp(
 			&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: updFactory(
@@ -54,7 +51,10 @@ var _ = Describe("TwoPlayer", func() {
 					),
 				},
 			},
-		))
+		)
+		each(func(conn *testserver.TestPlayerInRoom) {
+			Expect(conn.NextMsg(ctx)).Should(match)
+		}, conn1, conn2)
 
 		By("join team")
 		err = conn2.JoinTeam(testserver.TestUUID)
@@ -70,7 +70,7 @@ var _ = Describe("TwoPlayer", func() {
 		))
 
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},
@@ -78,7 +78,7 @@ var _ = Describe("TwoPlayer", func() {
 		}
 	})
 
-	It("transfer leadership once", func() {
+	It("transfer leadership once", func(ctx SpecContext) {
 		err := conn1.TransferLeadership(conn2.ID())
 		Expect(err).ShouldNot(HaveOccurred())
 
@@ -87,7 +87,7 @@ var _ = Describe("TwoPlayer", func() {
 			withLobby(conn1.Proto(), conn2.Proto()),
 		)
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},
@@ -95,7 +95,7 @@ var _ = Describe("TwoPlayer", func() {
 		}
 	})
 
-	It("transfer leadership twice", func() {
+	It("transfer leadership twice", func(ctx SpecContext) {
 		By("first transfer")
 		err := conn1.TransferLeadership(conn2.ID())
 		Expect(err).ShouldNot(HaveOccurred())
@@ -105,7 +105,7 @@ var _ = Describe("TwoPlayer", func() {
 			withLobby(conn1.Proto(), conn2.Proto()),
 		)
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},
@@ -121,7 +121,7 @@ var _ = Describe("TwoPlayer", func() {
 			withLobby(conn1.Proto(), conn2.Proto()),
 		)
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-			Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
+			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 				Message: &gamesvc.Message_UpdateRoom{
 					UpdateRoom: roomMsg,
 				},
@@ -149,11 +149,11 @@ var _ = Describe("TwoPlayer", func() {
 			)
 		})
 
-		BeforeEach(func() {
-			joinSameTeam(teamName, conn1, conn2)
+		BeforeEach(func(ctx SpecContext) {
+			joinSameTeam(ctx, teamName, conn1, conn2)
 		})
 
-		It("successfully start game", func() {
+		It("successfully start game", func(ctx SpecContext) {
 			By("start game")
 			err := conn1.StartGame()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -164,7 +164,7 @@ var _ = Describe("TwoPlayer", func() {
 			)
 
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
+				Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_UpdateRoom{
 						UpdateRoom: updMsg,
 					},

@@ -1,6 +1,7 @@
 package testserver
 
 import (
+	"context"
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -41,15 +42,14 @@ func (ctp *TestPlayerInRoom) Start() error {
 	}
 }
 
-func (ctp *TestPlayerInRoom) NextMsg() *gamesvc.Message {
-	msg, ok := <-ctp.C
-	if !ok {
-		panic("channel was closed")
+func (ctp *TestPlayerInRoom) NextMsg(ctx context.Context) *gamesvc.Message {
+	select {
+	case <-ctx.Done():
+		return nil
+	case msg := <-ctp.C:
+		ctp.setRoomState(msg)
+		return msg
 	}
-
-	ctp.setRoomState(msg)
-
-	return msg
 }
 
 func (ctp *TestPlayerInRoom) setRoomState(msg *gamesvc.Message) {
