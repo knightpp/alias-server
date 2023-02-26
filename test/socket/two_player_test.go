@@ -132,24 +132,44 @@ var _ = Describe("TwoPlayer", func() {
 	Describe("in a team", func() {
 		const teamName = "our team"
 
+		var updFactory func(opts ...updateRoomOption) *gamesvc.UpdateRoom
+
+		JustBeforeEach(func() {
+			updFactory = updateRoomRequestFactory(
+				protoRoom(),
+				withLeader(protoPlayer1().Id),
+				withTeams(
+					&gamesvc.Team{
+						Id:      testserver.TestUUID,
+						Name:    teamName,
+						PlayerA: conn1.Proto(),
+						PlayerB: conn2.Proto(),
+					},
+				),
+			)
+		})
+
 		BeforeEach(func() {
 			joinSameTeam(teamName, conn1, conn2)
 		})
 
-		FIt("successfully start game", func() {
+		It("successfully start game", func() {
 			By("start game")
 			err := conn1.StartGame()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			updMsg := updFactory(withIsPlaying(true), withPlayerIDTurn(conn1.ID()))
+			updMsg := updFactory(
+				withIsPlaying(true),
+				withPlayerIDTurn(conn1.ID()),
+			)
 
-			for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
-				Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
+			each(func(conn *testserver.TestPlayerInRoom) {
+				Expect(conn.NextMsg()).Should(matcher.EqualCmp(&gamesvc.Message{
 					Message: &gamesvc.Message_UpdateRoom{
 						UpdateRoom: updMsg,
 					},
 				}))
-			}
+			}, conn1, conn2)
 		})
 	})
 })
