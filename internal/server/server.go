@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-proto/go/mdkey"
 	"github.com/knightpp/alias-server/internal/game"
-	"github.com/knightpp/alias-server/internal/game/room"
 	"github.com/knightpp/alias-server/internal/storage"
-	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 )
@@ -24,38 +21,24 @@ type GameService struct {
 	log zerolog.Logger
 	db  storage.Player
 
-	game    *game.Game
-	roomsMu sync.Mutex
-	rooms   map[string]*room.Room
+	game *game.Game
 }
 
 func New(log zerolog.Logger, db storage.Player) *GameService {
 	return &GameService{
-		game:  game.New(),
-		rooms: make(map[string]*room.Room),
-		log:   log,
-		db:    db,
+		game: game.New(log),
+		log:  log,
+		db:   db,
 	}
 }
 
 func (gs *GameService) ListRooms(_ context.Context, _ *gamesvc.ListRoomsRequest) (*gamesvc.ListRoomsResponse, error) {
-	gs.roomsMu.Lock()
-	defer gs.roomsMu.Unlock()
-
-	roomsProto := make([]*gamesvc.Room, 0, len(gs.rooms))
-	for _, room := range gs.rooms {
-		roomsProto = append(roomsProto, room.GetProto())
-	}
-
 	return &gamesvc.ListRoomsResponse{
-		Rooms: roomsProto,
+		Rooms: gs.game.ListRooms(),
 	}, nil
 }
 
 func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRequest) (*gamesvc.CreateRoomResponse, error) {
-	gs.roomsMu.Lock()
-	defer gs.roomsMu.Unlock()
-
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errors.New("no metadata in request")
@@ -73,10 +56,7 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 		return nil, fmt.Errorf("get player: %w", err)
 	}
 
-	id := uuidgen.NewString()
-	room := gs.game.SpawnRoom(gs.log, id, player.Id, req)
-	go room.Start()
-	gs.rooms[id] = room
+	id := gs.game.CreateRoom(player, req)
 
 	return &gamesvc.CreateRoomResponse{
 		Id: id,
@@ -98,26 +78,12 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 		return fmt.Errorf("get auth token from md: %w", err)
 	}
 
-	gs.roomsMu.Lock()
-
-	room, ok := gs.rooms[roomID]
-	if !ok {
-		gs.roomsMu.Unlock()
-		return fmt.Errorf("could not find room with id=%q", roomID)
-	}
-
-	gs.roomsMu.Unlock()
-
 	player, err := gs.db.GetPlayer(ctx, authToken)
 	if err != nil {
 		return fmt.Errorf("get player: %w", err)
 	}
 
-	if room.HasPlayer(player.Id) {
-		return fmt.Errorf("player %q already in the room", player.Id)
-	}
-
-	return room.AddAndStartPlayer(stream, player)
+	return gs.game.StartPlayerInRoom(roomID, player, stream)
 }
 
 func singleFieldMD(field string, md metadata.MD) (string, error) {

@@ -31,7 +31,10 @@ func New(
 		Name:        proto.Name,
 		GravatarUrl: proto.GravatarUrl,
 
-		log:     log,
+		log: log.With().
+			Str("player-id", proto.Id).
+			Str("player-name", proto.Name).
+			Logger(),
 		socket:  socket,
 		done:    make(chan struct{}),
 		msgChan: make(chan *gamesvc.Message),
