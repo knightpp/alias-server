@@ -1,4 +1,4 @@
-package game
+package room
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/fp"
+	"github.com/knightpp/alias-server/internal/game/player"
+	"github.com/knightpp/alias-server/internal/game/team"
 	"github.com/knightpp/alias-server/internal/tuple"
 	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/life4/genesis/slices"
@@ -25,16 +27,15 @@ type Room struct {
 	IsPublic     bool
 	Langugage    string
 	Password     *string
-	Lobby        []*Player
-	Teams        []*Team
+	Lobby        []*player.Player
+	Teams        []*team.Team
 	IsPlaying    bool
 	PlayerIDTurn string
 
-	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
+	allMsgChan chan tuple.T2[*gamesvc.Message, *player.Player]
 	actorChan  chan func(*Room)
 	done       chan struct{}
 	log        zerolog.Logger
-	gen        uuidgen.Generator
 }
 
 func runFn1[R1 any](r *Room, fn func(r *Room) R1) R1 {
@@ -54,14 +55,12 @@ func NewRoom(
 	log zerolog.Logger,
 	roomID, leaderID string,
 	req *gamesvc.CreateRoomRequest,
-	gen uuidgen.Generator,
 ) *Room {
 	return &Room{
-		gen:        gen,
 		log:        log.With().Str("room-id", roomID).Logger(),
 		actorChan:  make(chan func(*Room)),
 		done:       make(chan struct{}),
-		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *Player]),
+		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *player.Player]),
 
 		Id:        roomID,
 		Name:      req.Name,
@@ -96,14 +95,14 @@ func (r *Room) Cancel() {
 	close(r.done)
 }
 
-func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
+func (r *Room) handleMessage(msg *gamesvc.Message, p *player.Player) error {
 	switch v := msg.Message.(type) {
 	case *gamesvc.Message_CreateTeam:
 		// TODO: return error if no such user
 		r.removePlayer(p.ID)
 
-		team := &Team{
-			ID:      p.uuidGen.NewString(),
+		team := &team.Team{
+			ID:      uuidgen.NewString(),
 			Name:    v.CreateTeam.Name,
 			PlayerA: p,
 			PlayerB: nil,
@@ -112,7 +111,7 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 		r.announceChange()
 		return nil
 	case *gamesvc.Message_JoinTeam:
-		team, ok := slices.Find(r.Teams, func(t *Team) bool {
+		team, ok := slices.Find(r.Teams, func(t *team.Team) bool {
 			return t.ID == v.JoinTeam.TeamId
 		})
 		if ok != nil {
@@ -176,7 +175,7 @@ func (r *Room) handleMessage(msg *gamesvc.Message, p *Player) error {
 	}
 }
 
-func (r *Room) findTeamOfPlayer(id string) *Team {
+func (r *Room) findTeamOfPlayer(id string) *team.Team {
 	for _, team := range r.Teams {
 		if team.PlayerA != nil && team.PlayerA.ID == id {
 			return team
@@ -189,7 +188,7 @@ func (r *Room) findTeamOfPlayer(id string) *Team {
 	return nil
 }
 
-func (r *Room) getAllPlayers() []*Player {
+func (r *Room) getAllPlayers() []*player.Player {
 	count := len(r.Lobby)
 	for _, t := range r.Teams {
 		if t.PlayerA != nil {
@@ -200,7 +199,7 @@ func (r *Room) getAllPlayers() []*Player {
 		}
 	}
 
-	players := make([]*Player, 0, count)
+	players := make([]*player.Player, 0, count)
 
 	for _, p := range r.Lobby {
 		players = append(players, p)
@@ -249,7 +248,7 @@ func (r *Room) getProto() *gamesvc.Room {
 
 func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *gamesvc.Player) error {
 	log := r.log.With().Str("player-id", proto.Id).Str("player-name", proto.Name).Logger()
-	player := newPlayer(log, r.gen, socket, proto)
+	player := player.New(log, socket, proto)
 
 	r.Do(func(r *Room) {
 		r.Lobby = append(r.Lobby, player)
@@ -263,7 +262,7 @@ func (r *Room) AddAndStartPlayer(socket gamesvc.GameService_JoinServer, proto *g
 				player.Cancel()
 				return
 
-			case msg, ok := <-player.msgChan:
+			case msg, ok := <-player.Chan():
 				if !ok {
 					return
 				}
@@ -334,7 +333,7 @@ func (r *Room) hasPlayer(playerID string) bool {
 
 func (r *Room) removePlayer(playerID string) bool {
 	oldLobbyLen := len(r.Lobby)
-	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *Player) bool {
+	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *player.Player) bool {
 		// TODO: potential data races if player struct accesses itself
 		return p.ID != playerID
 	})
@@ -357,7 +356,7 @@ func (r *Room) removePlayer(playerID string) bool {
 }
 
 func (r *Room) announceChange() {
-	send := func(p *Player) {
+	send := func(p *player.Player) {
 		if p == nil {
 			return
 		}

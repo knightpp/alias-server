@@ -9,6 +9,7 @@ import (
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-proto/go/mdkey"
 	"github.com/knightpp/alias-server/internal/game"
+	"github.com/knightpp/alias-server/internal/game/room"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
@@ -20,20 +21,20 @@ var _ gamesvc.GameServiceServer = (*GameService)(nil)
 type GameService struct {
 	gamesvc.UnimplementedGameServiceServer
 
-	log     zerolog.Logger
-	uuidGen uuidgen.Generator
-	db      storage.Player
+	log zerolog.Logger
+	db  storage.Player
 
+	game    *game.Game
 	roomsMu sync.Mutex
-	rooms   map[string]*game.Room
+	rooms   map[string]*room.Room
 }
 
-func New(log zerolog.Logger, db storage.Player, gen uuidgen.Generator) *GameService {
+func New(log zerolog.Logger, db storage.Player) *GameService {
 	return &GameService{
-		rooms:   make(map[string]*game.Room),
-		log:     log,
-		db:      db,
-		uuidGen: gen,
+		game:  game.New(),
+		rooms: make(map[string]*room.Room),
+		log:   log,
+		db:    db,
 	}
 }
 
@@ -72,8 +73,8 @@ func (gs *GameService) CreateRoom(ctx context.Context, req *gamesvc.CreateRoomRe
 		return nil, fmt.Errorf("get player: %w", err)
 	}
 
-	id := gs.uuidGen.NewString()
-	room := game.NewRoom(gs.log, id, player.Id, req, gs.uuidGen)
+	id := uuidgen.NewString()
+	room := gs.game.SpawnRoom(gs.log, id, player.Id, req)
 	go room.Start()
 	gs.rooms[id] = room
 

@@ -154,7 +154,6 @@ var _ = Describe("TwoPlayer", func() {
 		})
 
 		It("successfully start game", func(ctx SpecContext) {
-			By("start game")
 			err := conn1.StartGame()
 			Expect(err).ShouldNot(HaveOccurred())
 

@@ -62,7 +62,7 @@ var _ = Describe("OnePlayer", func() {
 		err := conn.StartGame()
 		Expect(err).ShouldNot(HaveOccurred())
 
-		expectedErr := game.ErrStartNoTeams
+		expectedErr := game.ErrRoomNoTeams
 		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_Error{
 				Error: &gamesvc.MsgError{
@@ -89,7 +89,7 @@ var _ = Describe("OnePlayer", func() {
 		err = conn.StartGame()
 		Expect(err).ShouldNot(HaveOccurred())
 
-		expectedErr := game.ErrStartIncompleteTeam
+		expectedErr := game.ErrRoomNoTeams
 		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_Error{
 				Error: &gamesvc.MsgError{

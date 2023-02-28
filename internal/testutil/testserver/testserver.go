@@ -38,7 +38,7 @@ func CreateAndStart() (*TestServer, error) {
 		T:     GinkgoT(),
 		Frame: 4,
 	})
-	gameServer := server.New(log, playerDB, constantUUIDGen{})
+	gameServer := server.New(log, playerDB)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

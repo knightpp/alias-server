@@ -1,11 +1,10 @@
-package game
+package player
 
 import (
 	"fmt"
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -18,14 +17,12 @@ type Player struct {
 	once    sync.Once
 	done    chan struct{}
 	msgChan chan *gamesvc.Message
-	uuidGen uuidgen.Generator
 	socket  gamesvc.GameService_JoinServer
 	log     zerolog.Logger
 }
 
-func newPlayer(
+func New(
 	log zerolog.Logger,
-	gen uuidgen.Generator,
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
 ) *Player {
@@ -35,7 +32,6 @@ func newPlayer(
 		GravatarUrl: proto.GravatarUrl,
 
 		log:     log,
-		uuidGen: gen,
 		socket:  socket,
 		done:    make(chan struct{}),
 		msgChan: make(chan *gamesvc.Message),
@@ -94,4 +90,8 @@ func (p *Player) SendError(err string) error {
 			},
 		},
 	})
+}
+
+func (p *Player) Chan() chan *gamesvc.Message {
+	return p.msgChan
 }
