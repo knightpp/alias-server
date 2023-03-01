@@ -8,7 +8,7 @@ require (
 	github.com/huandu/go-clone/generic v1.5.0
 	github.com/knightpp/alias-proto/go v0.0.0-20230203213652-4df0cf3b0680
 	github.com/life4/genesis v1.1.0
-	github.com/onsi/ginkgo/v2 v2.8.3
+	github.com/onsi/ginkgo/v2 v2.8.4
 	github.com/onsi/gomega v1.27.1
 	github.com/redis/go-redis/v9 v9.0.2
 	github.com/rs/zerolog v1.29.0
