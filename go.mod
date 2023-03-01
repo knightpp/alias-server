@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
-	github.com/huandu/go-clone/generic v1.5.0
+	github.com/huandu/go-clone/generic v1.5.1
 	github.com/knightpp/alias-proto/go v0.0.0-20230203213652-4df0cf3b0680
 	github.com/life4/genesis v1.1.0
 	github.com/onsi/ginkgo/v2 v2.8.3
@@ -25,7 +25,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
-	github.com/huandu/go-clone v1.5.0 // indirect
+	github.com/huandu/go-clone v1.5.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect

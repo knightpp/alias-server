@@ -31,8 +31,12 @@ github.com/huandu/go-assert v1.1.5 h1:fjemmA7sSfYHJD7CUqs9qTwwfdNAx7/j2/ZlHXzNB3
 github.com/huandu/go-assert v1.1.5/go.mod h1:yOLvuqZwmcHIC5rIzrBhT7D3Q9c3GFnd0JrPVhn/06U=
 github.com/huandu/go-clone v1.5.0 h1:vXzaNv7gjTsP6dT3KSv98wrVbC+WLhKVfoM+gvHBxbk=
 github.com/huandu/go-clone v1.5.0/go.mod h1:ReGivhG6op3GYr+UY3lS6mxjKp7MIGTknuU5TbTVaXE=
+github.com/huandu/go-clone v1.5.1 h1:1wlwYRlHZo4HspdOM0YQ6O7Y7bjtxTrrt+4jnDeejVo=
+github.com/huandu/go-clone v1.5.1/go.mod h1:ReGivhG6op3GYr+UY3lS6mxjKp7MIGTknuU5TbTVaXE=
 github.com/huandu/go-clone/generic v1.5.0 h1:JK2Dx1PDacpIQFJIW+kR47GFZNfo3A91a/dZ4sv7+68=
 github.com/huandu/go-clone/generic v1.5.0/go.mod h1:VGsDiNGh3+dpWVA9hbQjxq/f/qvQINu3pxS7TyfBABs=
+github.com/huandu/go-clone/generic v1.5.1 h1:imLp4LwEmdoryrkIWG9YT9l7cVzipkf/emusX5XQXrw=
+github.com/huandu/go-clone/generic v1.5.1/go.mod h1:e5+xQAEqMRs6ScpWrg8yCHMvOCemfz6qSHzXjbsCabY=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/kr/pretty v0.2.1/go.mod h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
