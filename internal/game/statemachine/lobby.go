@@ -101,10 +101,10 @@ func handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity
 		return Lobby{}, errors.New("no players in the first team")
 	}
 
-	r.IsPlaying = true
+	r.IsGameStarted = true
 
 	r.AnnounceChange()
 
-	return Lobby{}, nil
+	return Game{}, nil
 
 }

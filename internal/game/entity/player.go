@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"fmt"
 	"sync"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -61,7 +60,7 @@ func (p *Player) Start() error {
 	for {
 		msg, err := p.socket.Recv()
 		if err != nil {
-			return fmt.Errorf("socket recv: %w", err)
+			return err
 		}
 
 		evt := p.log.Debug()

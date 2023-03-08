@@ -11,6 +11,7 @@ import (
 	"github.com/knightpp/alias-server/internal/tuple"
 	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -131,11 +132,13 @@ func (g *Game) StartPlayerInRoom(
 
 	err = player.Start()
 	if err != nil {
-		g.log.
-			Err(err).
-			Stringer("status_code", status.Code(err)).
-			Interface("player", player).
-			Msg("tried to send message and something went wrong")
+		if status.Code(err) != codes.Canceled {
+			g.log.
+				Err(err).
+				Stringer("status_code", status.Code(err)).
+				Interface("player", player).
+				Msg("tried to send message and something went wrong")
+		}
 
 		r.Do(func(r *entity.Room) {
 			ok := r.RemovePlayer(player.ID)

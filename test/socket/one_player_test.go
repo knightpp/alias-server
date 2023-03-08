@@ -26,11 +26,7 @@ var _ = Describe("OnePlayer", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 
 		expectedMsg := updFactory(withLobby(playerProto))
-		Expect(connLocal.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: expectedMsg,
-			},
-		}))
+		Expect(connLocal.NextMsg(ctx)).Should(matcher.EqualCmp(expectedMsg))
 
 		conn = connLocal
 	})
@@ -51,15 +47,11 @@ var _ = Describe("OnePlayer", func() {
 		err := conn.CreateTeam(teamName)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: expectedMsg,
-			},
-		}))
+		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(expectedMsg))
 	})
 
 	It("start game when no teams", func(ctx SpecContext) {
-		err := conn.StartGame()
+		err := conn.StartGame([]string{conn.ID()})
 		Expect(err).ShouldNot(HaveOccurred())
 
 		expectedErr := game.ErrRoomNoTeams
@@ -76,17 +68,13 @@ var _ = Describe("OnePlayer", func() {
 		err := conn.CreateTeam("super team")
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(conn.NextMsg(ctx)).To(matcher.EqualCmp(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: updFactory(withTeams(&gamesvc.Team{
-					Id:      testserver.TestUUID,
-					Name:    "super team",
-					PlayerA: conn.Proto(),
-				})),
-			},
-		}))
+		Expect(conn.NextMsg(ctx)).To(matcher.EqualCmp(updFactory(withTeams(&gamesvc.Team{
+			Id:      testserver.TestUUID,
+			Name:    "super team",
+			PlayerA: conn.Proto(),
+		}))))
 
-		err = conn.StartGame()
+		err = conn.StartGame([]string{conn.ID()})
 		Expect(err).ShouldNot(HaveOccurred())
 
 		expectedErr := game.ErrRoomIncompleteTeam

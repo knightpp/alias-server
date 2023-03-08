@@ -56,10 +56,6 @@ func CreateAndStart() (*TestServer, error) {
 
 	DeferCleanup(func() {
 		grpcServer.GracefulStop()
-		err := lis.Close()
-		if err != nil {
-			log.Err(err).Msg("close listener")
-		}
 	})
 
 	return &TestServer{

@@ -15,16 +15,17 @@ var (
 )
 
 type Room struct {
-	Id           string
-	Name         string
-	LeaderId     string
-	IsPublic     bool
-	Langugage    string
-	Password     *string
-	Lobby        []*Player
-	Teams        []*Team
-	IsPlaying    bool
-	PlayerIDTurn string
+	Id            string
+	Name          string
+	LeaderId      string
+	IsPublic      bool
+	Langugage     string
+	Password      *string
+	Lobby         []*Player
+	Teams         []*Team
+	IsPlaying     bool
+	IsGameStarted bool
+	PlayerIDTurn  string
 
 	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
 	actorChan  chan func(*Room)
@@ -121,15 +122,16 @@ func (r *Room) GetProto() *gamesvc.Room {
 	}
 
 	return &gamesvc.Room{
-		Id:           r.Id,
-		Name:         r.Name,
-		LeaderId:     r.LeaderId,
-		IsPublic:     r.IsPublic,
-		Langugage:    r.Langugage,
-		Lobby:        lobby,
-		Teams:        teams,
-		IsPlaying:    r.IsPlaying,
-		PlayerIdTurn: r.PlayerIDTurn,
+		Id:            r.Id,
+		Name:          r.Name,
+		LeaderId:      r.LeaderId,
+		IsPublic:      r.IsPublic,
+		Langugage:     r.Langugage,
+		Lobby:         lobby,
+		Teams:         teams,
+		IsPlaying:     r.IsPlaying,
+		IsGameStarted: r.IsGameStarted,
+		PlayerIdTurn:  r.PlayerIDTurn,
 	}
 }
 

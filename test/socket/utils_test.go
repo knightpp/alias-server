@@ -50,11 +50,7 @@ func createTwoPlayers(ctx context.Context) (*testserver.TestPlayerInRoom, *tests
 	conn1, err := p1.Join(roomID)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
-	ExpectWithOffset(1, conn1.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
-		Message: &gamesvc.Message_UpdateRoom{
-			UpdateRoom: updateRoomReqFactory(withLobby(player1)),
-		},
-	}))
+	ExpectWithOffset(1, conn1.NextMsg(ctx)).Should(matcher.EqualCmp(updateRoomReqFactory(withLobby(player1))))
 
 	p2, err := srv.NewPlayer(ctx, player2)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
@@ -62,11 +58,7 @@ func createTwoPlayers(ctx context.Context) (*testserver.TestPlayerInRoom, *tests
 	conn2, err := p2.Join(roomID)
 	ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
 
-	match := matcher.EqualCmp(&gamesvc.Message{
-		Message: &gamesvc.Message_UpdateRoom{
-			UpdateRoom: updateRoomReqFactory(withLobby(player1, player2)),
-		},
-	})
+	match := matcher.EqualCmp(updateRoomReqFactory(withLobby(player1, player2)))
 	for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
 		ExpectWithOffset(1, conn.NextMsg(ctx)).Should(match)
 	}
@@ -105,11 +97,7 @@ func joinSameTeam(
 	}))
 
 	each(func(conn *testserver.TestPlayerInRoom) {
-		Eventually(conn.Poll).Should(matcher.EqualCmp(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: roomMsg,
-			},
-		}))
+		Eventually(conn.Poll).Should(matcher.EqualCmp(roomMsg))
 	}, conn1, conn2)
 }
 
@@ -133,6 +121,12 @@ func withTeams(teams ...*gamesvc.Team) updateRoomOption {
 	}
 }
 
+func withStartedGame(started bool) updateRoomOption {
+	return func(ur *gamesvc.UpdateRoom) {
+		ur.Room.IsGameStarted = started
+	}
+}
+
 func withIsPlaying(playing bool) updateRoomOption {
 	return func(ur *gamesvc.UpdateRoom) {
 		ur.Room.IsPlaying = playing
@@ -145,9 +139,12 @@ func withPlayerIDTurn(id string) updateRoomOption {
 	}
 }
 
-func updateRoomRequestFactory(room *gamesvc.CreateRoomRequest, persistentOpts ...updateRoomOption) func(opts ...updateRoomOption) *gamesvc.UpdateRoom {
-	return func(opts ...updateRoomOption) *gamesvc.UpdateRoom {
-		req := &gamesvc.UpdateRoom{
+func updateRoomRequestFactory(
+	room *gamesvc.CreateRoomRequest,
+	persistentOpts ...updateRoomOption,
+) func(opts ...updateRoomOption) *gamesvc.Message {
+	return func(opts ...updateRoomOption) *gamesvc.Message {
+		msg := &gamesvc.UpdateRoom{
 			Room: &gamesvc.Room{
 				Id:           testserver.TestUUID,
 				Name:         room.Name,
@@ -163,16 +160,20 @@ func updateRoomRequestFactory(room *gamesvc.CreateRoomRequest, persistentOpts ..
 		}
 
 		for _, opt := range persistentOpts {
-			opt(req)
+			opt(msg)
 		}
 		for _, opt := range opts {
-			opt(req)
+			opt(msg)
 		}
 
-		if req.Room.LeaderId == "" {
+		if msg.Room.LeaderId == "" {
 			panic("LeaderId must not be empty")
 		}
 
-		return req
+		return &gamesvc.Message{
+			Message: &gamesvc.Message_UpdateRoom{
+				UpdateRoom: msg,
+			},
+		}
 	}
 }
