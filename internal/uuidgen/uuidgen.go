@@ -19,6 +19,20 @@ func (GoogleUUID) NewString() string {
 	return uuid.NewString()
 }
 
+type Constant struct {
+	Value string
+}
+
+func NewConstant(value string) Constant {
+	return Constant{
+		Value: value,
+	}
+}
+
+func (c Constant) NewString() string {
+	return c.Value
+}
+
 func SetGlobal(gen Generator) {
 	global = gen
 }

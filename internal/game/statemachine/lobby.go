@@ -16,8 +16,6 @@ func (l Lobby) HandleMessage(message *gamesvc.Message, p *entity.Player, r *enti
 	switch v := message.Message.(type) {
 	case *gamesvc.Message_CreateTeam:
 		return handleCreateTeam(v, p, r)
-	case *gamesvc.Message_JoinRoom:
-		return nil, nil
 	case *gamesvc.Message_JoinTeam:
 		return handleJoinTeam(v, p, r)
 	case *gamesvc.Message_TransferLeadership:

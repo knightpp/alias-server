@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrRoomNoTeams  = entity.ErrStartNoTeams
-	ErrRoomNotFound = errors.New("room not found")
-	ErrPlayerInRoom = errors.New("player already in the room")
+	ErrRoomNoTeams        = entity.ErrStartNoTeams
+	ErrRoomIncompleteTeam = entity.ErrStartIncompleteTeam
+	ErrRoomNotFound       = errors.New("room not found")
+	ErrPlayerInRoom       = errors.New("player already in the room")
 )
 
 type Game struct {
@@ -87,7 +88,7 @@ func (g *Game) StartPlayerInRoom(
 	g.roomsMu.Lock()
 	r, ok := g.rooms[roomID]
 	g.roomsMu.Unlock()
-	if ok {
+	if !ok {
 		return ErrRoomNotFound
 	}
 
