@@ -1,12 +1,10 @@
-package room
+package entity
 
 import (
 	"errors"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/fp"
-	"github.com/knightpp/alias-server/internal/game/player"
-	"github.com/knightpp/alias-server/internal/game/team"
 	"github.com/knightpp/alias-server/internal/tuple"
 	"github.com/rs/zerolog"
 )
@@ -23,12 +21,12 @@ type Room struct {
 	IsPublic     bool
 	Langugage    string
 	Password     *string
-	Lobby        []*player.Player
-	Teams        []*team.Team
+	Lobby        []*Player
+	Teams        []*Team
 	IsPlaying    bool
 	PlayerIDTurn string
 
-	allMsgChan chan tuple.T2[*gamesvc.Message, *player.Player]
+	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
 	actorChan  chan func(*Room)
 	done       chan struct{}
 	log        zerolog.Logger
@@ -43,7 +41,7 @@ func NewRoom(
 		log:        log.With().Str("room-id", roomID).Logger(),
 		actorChan:  make(chan func(*Room)),
 		done:       make(chan struct{}),
-		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *player.Player]),
+		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *Player]),
 
 		Id:        roomID,
 		Name:      req.Name,
@@ -70,7 +68,7 @@ func (r *Room) Cancel() {
 	close(r.done)
 }
 
-func (r *Room) findTeamOfPlayer(id string) *team.Team {
+func (r *Room) findTeamOfPlayer(id string) *Team {
 	for _, team := range r.Teams {
 		if team.PlayerA != nil && team.PlayerA.ID == id {
 			return team
@@ -83,7 +81,7 @@ func (r *Room) findTeamOfPlayer(id string) *team.Team {
 	return nil
 }
 
-func (r *Room) getAllPlayers() []*player.Player {
+func (r *Room) getAllPlayers() []*Player {
 	count := len(r.Lobby)
 	for _, t := range r.Teams {
 		if t.PlayerA != nil {
@@ -94,7 +92,7 @@ func (r *Room) getAllPlayers() []*player.Player {
 		}
 	}
 
-	players := make([]*player.Player, 0, count)
+	players := make([]*Player, 0, count)
 
 	for _, p := range r.Lobby {
 		players = append(players, p)
@@ -139,7 +137,7 @@ func (r *Room) Done() chan struct{} {
 	return r.done
 }
 
-func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *player.Player] {
+func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *Player] {
 	return r.allMsgChan
 }
 
@@ -171,7 +169,7 @@ func (r *Room) HasPlayer(playerID string) bool {
 
 func (r *Room) RemovePlayer(playerID string) bool {
 	oldLobbyLen := len(r.Lobby)
-	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *player.Player) bool {
+	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *Player) bool {
 		// TODO: potential data races if player struct accesses itself
 		return p.ID != playerID
 	})
@@ -194,7 +192,7 @@ func (r *Room) RemovePlayer(playerID string) bool {
 }
 
 func (r *Room) AnnounceChange() {
-	send := func(p *player.Player) {
+	send := func(p *Player) {
 		if p == nil {
 			return
 		}

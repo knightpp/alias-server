@@ -1,16 +1,15 @@
-package team
+package entity
 
 import (
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/knightpp/alias-server/internal/game/player"
 )
 
 type Team struct {
 	ID   string
 	Name string
 
-	PlayerA *player.Player
-	PlayerB *player.Player
+	PlayerA *Player
+	PlayerB *Player
 }
 
 func (t *Team) ToProto() *gamesvc.Team {

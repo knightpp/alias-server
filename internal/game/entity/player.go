@@ -1,4 +1,4 @@
-package player
+package entity
 
 import (
 	"fmt"
@@ -14,6 +14,8 @@ type Player struct {
 	Name        string
 	GravatarUrl string
 
+	Room *Room
+
 	once    sync.Once
 	done    chan struct{}
 	msgChan chan *gamesvc.Message
@@ -21,15 +23,17 @@ type Player struct {
 	log     zerolog.Logger
 }
 
-func New(
+func NewPlayer(
 	log zerolog.Logger,
 	socket gamesvc.GameService_JoinServer,
 	proto *gamesvc.Player,
+	room *Room,
 ) *Player {
 	return &Player{
 		ID:          proto.Id,
 		Name:        proto.Name,
 		GravatarUrl: proto.GravatarUrl,
+		Room:        room,
 
 		log: log.With().
 			Str("player-id", proto.Id).
