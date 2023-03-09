@@ -82,7 +82,20 @@ func (r *Room) findTeamOfPlayer(id string) *Team {
 	return nil
 }
 
-func (r *Room) getAllPlayers() []*Player {
+func (r *Room) FindTeamWithPlayer(playerID string) (*Team, bool) {
+	for _, t := range r.Teams {
+		if t.PlayerA != nil && t.PlayerA.ID == playerID {
+			return t, true
+		}
+
+		if t.PlayerB != nil && t.PlayerB.ID == playerID {
+			return t, true
+		}
+	}
+	return nil, false
+}
+
+func (r *Room) GetAllPlayers() []*Player {
 	count := len(r.Lobby)
 	for _, t := range r.Teams {
 		if t.PlayerA != nil {
@@ -193,13 +206,13 @@ func (r *Room) RemovePlayer(playerID string) bool {
 	return changed || (oldLobbyLen != newLobbyLen)
 }
 
-func (r *Room) AnnounceChange() {
-	send := func(p *Player) {
+func (r *Room) AnnounceChange() error {
+	send := func(p *Player) error {
 		if p == nil {
-			return
+			return nil
 		}
 
-		p.SendMsg(&gamesvc.Message{
+		return p.SendMsg(&gamesvc.Message{
 			Message: &gamesvc.Message_UpdateRoom{
 				UpdateRoom: &gamesvc.UpdateRoom{
 					Room:     r.GetProto(),
@@ -209,12 +222,26 @@ func (r *Room) AnnounceChange() {
 		})
 	}
 
+	var errs []error
+
 	for _, p := range r.Lobby {
-		send(p)
+		err := send(p)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	for _, team := range r.Teams {
-		send(team.PlayerA)
-		send(team.PlayerB)
+		err := send(team.PlayerA)
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		err = send(team.PlayerB)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
+
+	return errors.Join(errs...)
 }

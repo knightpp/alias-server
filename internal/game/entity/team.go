@@ -20,3 +20,15 @@ func (t *Team) ToProto() *gamesvc.Team {
 		PlayerB: t.PlayerB.ToProto(),
 	}
 }
+
+func (t *Team) OponentOf(playerID string) (*Player, bool) {
+	if t.PlayerA != nil && t.PlayerA.ID == playerID {
+		return t.PlayerB, true
+	}
+
+	if t.PlayerB != nil && t.PlayerB.ID == playerID {
+		return t.PlayerA, true
+	}
+
+	return nil, false
+}

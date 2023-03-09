@@ -180,14 +180,14 @@ var _ = Describe("TwoPlayer", func() {
 		}, NodeTimeout(time.Second))
 
 		It("start turn wrong player", func(ctx SpecContext) {
-			err := conn2.StartTurn()
+			err := conn2.StartTurn(time.Second)
 
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(conn2.NextMsg(ctx).GetError()).ToNot(BeNil())
 		}, NodeTimeout(time.Second))
 
 		It("start turn right player", func(ctx SpecContext) {
-			err := conn1.StartTurn()
+			err := conn1.StartTurn(time.Second)
 
 			Expect(err).ShouldNot(HaveOccurred())
 			each(func(conn *testserver.TestPlayerInRoom) {
@@ -197,5 +197,56 @@ var _ = Describe("TwoPlayer", func() {
 				)))
 			}, conn1, conn2)
 		}, NodeTimeout(time.Second))
+
+		It("start turn with zero duration", func(ctx SpecContext) {
+			err := conn1.StartTurn(0)
+
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(conn1.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+		}, NodeTimeout(time.Second))
+
+		It("start turn right player twice", func(ctx SpecContext) {
+			err := conn1.StartTurn(time.Second)
+
+			By("sending first StartTurn")
+			Expect(err).ShouldNot(HaveOccurred())
+			each(func(conn *testserver.TestPlayerInRoom) {
+				Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updFactory(
+					withPlayerIDTurn(turnOrder[0]),
+					withIsPlaying(true),
+				)))
+			}, conn1, conn2)
+
+			By("sending second StartTurn")
+			err = conn1.StartTurn(time.Second)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(conn1.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+		}, NodeTimeout(time.Second))
+
+		Context("in a turn", func() {
+			BeforeEach(func(ctx SpecContext) {
+				err := conn1.StartTurn(time.Second)
+
+				Expect(err).ShouldNot(HaveOccurred())
+				each(func(conn *testserver.TestPlayerInRoom) {
+					Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updFactory(
+						withPlayerIDTurn(turnOrder[0]),
+						withIsPlaying(true),
+					)))
+				}, conn1, conn2)
+			}, NodeTimeout(time.Second))
+
+			It("end turn should succeed", func(ctx SpecContext) {
+				err := conn1.EndTurn(1, 2)
+
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(conn2.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(
+					&gamesvc.MsgEndTurn{
+						Rights: 1,
+						Wrongs: 2,
+					},
+				))
+			}, NodeTimeout(time.Second))
+		})
 	})
 })

@@ -10,24 +10,26 @@ import (
 	"github.com/life4/genesis/slices"
 )
 
+var _ Stater = Game{}
+
 type Lobby struct{}
 
 func (l Lobby) HandleMessage(message *gamesvc.Message, p *entity.Player, r *entity.Room) (Stater, error) {
 	switch v := message.Message.(type) {
 	case *gamesvc.Message_CreateTeam:
-		return handleCreateTeam(v, p, r)
+		return l.handleCreateTeam(v, p, r)
 	case *gamesvc.Message_JoinTeam:
-		return handleJoinTeam(v, p, r)
+		return l.handleJoinTeam(v, p, r)
 	case *gamesvc.Message_TransferLeadership:
-		return handleTransferLeadership(v, p, r)
+		return l.handleTransferLeadership(v, p, r)
 	case *gamesvc.Message_StartGame:
-		return handleStartGame(v, p, r)
+		return l.handleStartGame(v, p, r)
 	default:
 		return l, &UnknownMessageTypeError{T: message.Message}
 	}
 }
 
-func handleCreateTeam(msg *gamesvc.Message_CreateTeam, p *entity.Player, r *entity.Room) (Stater, error) {
+func (l Lobby) handleCreateTeam(msg *gamesvc.Message_CreateTeam, p *entity.Player, r *entity.Room) (Stater, error) {
 	// TODO: return error if no such user
 	r.RemovePlayer(p.ID)
 
@@ -39,15 +41,15 @@ func handleCreateTeam(msg *gamesvc.Message_CreateTeam, p *entity.Player, r *enti
 	}
 	r.Teams = append(r.Teams, team)
 	r.AnnounceChange()
-	return Lobby{}, nil
+	return l, nil
 }
 
-func handleJoinTeam(msg *gamesvc.Message_JoinTeam, p *entity.Player, r *entity.Room) (Stater, error) {
+func (l Lobby) handleJoinTeam(msg *gamesvc.Message_JoinTeam, p *entity.Player, r *entity.Room) (Stater, error) {
 	team, ok := slices.Find(r.Teams, func(t *entity.Team) bool {
 		return t.ID == msg.JoinTeam.TeamId
 	})
 	if ok != nil {
-		return Lobby{}, fmt.Errorf("TODO: team not found")
+		return l, fmt.Errorf("TODO: team not found")
 	}
 
 	r.RemovePlayer(p.ID)
@@ -57,37 +59,37 @@ func handleJoinTeam(msg *gamesvc.Message_JoinTeam, p *entity.Player, r *entity.R
 	case team.PlayerB == nil:
 		team.PlayerB = p
 	default:
-		return Lobby{}, fmt.Errorf("TODO: team is full")
+		return l, fmt.Errorf("TODO: team is full")
 	}
 
 	r.AnnounceChange()
-	return Lobby{}, nil
+	return l, nil
 }
 
-func handleTransferLeadership(msg *gamesvc.Message_TransferLeadership, p *entity.Player, r *entity.Room) (Stater, error) {
+func (l Lobby) handleTransferLeadership(msg *gamesvc.Message_TransferLeadership, p *entity.Player, r *entity.Room) (Stater, error) {
 	id := msg.TransferLeadership.PlayerId
 	exists := r.HasPlayer(id)
 	if !exists {
-		return Lobby{}, fmt.Errorf("could not transfer leadership: no player with id=%s", id)
+		return l, fmt.Errorf("could not transfer leadership: no player with id=%s", id)
 	}
 
 	r.LeaderId = id
 	r.AnnounceChange()
 
-	return Lobby{}, nil
+	return l, nil
 }
 
-func handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity.Room) (Stater, error) {
+func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity.Room) (Stater, error) {
 	if r.LeaderId != p.ID {
-		return Lobby{}, errors.New("only leader id can start game")
+		return l, errors.New("only leader id can start game")
 	}
 
 	if len(r.Teams) == 0 {
-		return Lobby{}, entity.ErrStartNoTeams
+		return l, entity.ErrStartNoTeams
 	}
 	for _, team := range r.Teams {
 		if team.PlayerA == nil || team.PlayerB == nil {
-			return Lobby{}, entity.ErrStartIncompleteTeam
+			return l, entity.ErrStartIncompleteTeam
 		}
 	}
 
@@ -98,7 +100,7 @@ func handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity
 	case firstTeam.PlayerB != nil:
 		r.PlayerIDTurn = firstTeam.PlayerB.ID
 	default:
-		return Lobby{}, errors.New("no players in the first team")
+		return l, errors.New("no players in the first team")
 	}
 
 	r.IsGameStarted = true
@@ -106,5 +108,4 @@ func handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity
 	r.AnnounceChange()
 
 	return Game{}, nil
-
 }

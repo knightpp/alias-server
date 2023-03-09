@@ -32,7 +32,6 @@ var _ = Describe("OnePlayer", func() {
 	})
 
 	It("first message is UpdateRoom", func() {
-
 	})
 
 	It("create team", func(ctx SpecContext) {

@@ -3,6 +3,7 @@ package testserver
 import (
 	"context"
 	"sync"
+	"time"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	. "github.com/onsi/gomega"
@@ -153,10 +154,23 @@ func (tpr *TestPlayerInRoom) StartGame(turns []string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) StartTurn() error {
+func (tpr *TestPlayerInRoom) StartTurn(duration time.Duration) error {
 	return tpr.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_StartTurn{
-			StartTurn: &gamesvc.MsgStartTurn{},
+			StartTurn: &gamesvc.MsgStartTurn{
+				DurationMs: uint64(duration.Milliseconds()),
+			},
+		},
+	})
+}
+
+func (tpr *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_EndTurn{
+			EndTurn: &gamesvc.MsgEndTurn{
+				Rights: rights,
+				Wrongs: wrongs,
+			},
 		},
 	})
 }
