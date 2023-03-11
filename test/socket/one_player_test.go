@@ -3,6 +3,7 @@ package socket_test
 import (
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/game"
+	"github.com/knightpp/alias-server/internal/testutil/factory"
 	"github.com/knightpp/alias-server/internal/testutil/matcher"
 	"github.com/knightpp/alias-server/internal/testutil/testserver"
 	. "github.com/onsi/ginkgo/v2"
@@ -10,11 +11,14 @@ import (
 )
 
 var _ = Describe("OnePlayer", func() {
-	updFactory := updateRoomRequestFactory(protoRoom(), withLeader(protoPlayer1().Id))
-
-	var conn *testserver.TestPlayerInRoom
+	var (
+		updFactory *factory.Room
+		conn       *testserver.TestPlayerInRoom
+	)
 	BeforeEach(func(ctx SpecContext) {
-		playerProto, room := protoPlayer1(), protoRoom()
+		updFactory = factory.NewRoom(protoRoom()).WithLeader(protoPlayer(1).Id)
+
+		playerProto, room := protoPlayer(1), protoRoom()
 
 		srv, err := testserver.CreateAndStart()
 		Expect(err).ShouldNot(HaveOccurred())
@@ -25,7 +29,7 @@ var _ = Describe("OnePlayer", func() {
 		connLocal, err := player.CreateRoomAndJoin(ctx, room)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		expectedMsg := updFactory(withLobby(playerProto))
+		expectedMsg := updFactory.Clone().WithLobby(playerProto).Build()
 		Expect(connLocal.NextMsg(ctx)).Should(matcher.EqualCmp(expectedMsg))
 
 		conn = connLocal
@@ -36,17 +40,13 @@ var _ = Describe("OnePlayer", func() {
 
 	It("create team", func(ctx SpecContext) {
 		teamName := "my super duper name"
-		expectedMsg := updFactory(withTeams(
-			&gamesvc.Team{
-				Id:      testserver.TestUUID,
-				Name:    teamName,
-				PlayerA: conn.Proto(),
-			},
-		))
+
 		err := conn.CreateTeam(teamName)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(expectedMsg))
+		resp := conn.NextMsg(ctx).GetTeamCreated()
+		Expect(resp).ShouldNot(BeNil())
+		Expect(resp.Team.Name, resp.Team.PlayerA, resp.Team.PlayerB).To(Equal(teamName))
 	})
 
 	It("start game when no teams", func(ctx SpecContext) {
@@ -64,18 +64,28 @@ var _ = Describe("OnePlayer", func() {
 	})
 
 	It("start game when incomplete team", func(ctx SpecContext) {
+		By("create team")
+
 		err := conn.CreateTeam("super team")
 		Expect(err).ShouldNot(HaveOccurred())
-
-		Expect(conn.NextMsg(ctx)).To(matcher.EqualCmp(updFactory(withTeams(&gamesvc.Team{
-			Id:      testserver.TestUUID,
+		info := conn.NextMsg(ctx).GetTeamCreated()
+		Expect(info).ToNot(BeNil())
+		msg := updFactory.WithTeams(&gamesvc.Team{
+			Id:      info.Team.Id,
 			Name:    "super team",
 			PlayerA: conn.Proto(),
-		}))))
+		}).Build()
+
+		By("join team")
+
+		err = conn.JoinTeam(info.Team.Id)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(msg))
+
+		By("start game")
 
 		err = conn.StartGame([]string{conn.ID()})
 		Expect(err).ShouldNot(HaveOccurred())
-
 		expectedErr := game.ErrRoomIncompleteTeam
 		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{
 			Message: &gamesvc.Message_Error{

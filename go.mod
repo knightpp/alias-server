@@ -3,6 +3,7 @@ module github.com/knightpp/alias-server
 go 1.20
 
 require (
+	github.com/brianvoe/gofakeit/v6 v6.20.2
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-clone/generic v1.5.1

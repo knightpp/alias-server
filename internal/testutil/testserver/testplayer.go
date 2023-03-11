@@ -53,13 +53,12 @@ func (tp *TestPlayer) Join(roomID string) (*TestPlayerInRoom, error) {
 	}
 
 	playerInRoom := &TestPlayerInRoom{
-		done:      make(chan struct{}),
-		C:         make(chan *gamesvc.Message),
-		logger:    tp.log.With().Str("room.id", roomID).Logger(),
-		sock:      sock,
-		authToken: tp.authToken,
-		player:    tp.player,
-		cancel:    cancel,
+		done:   make(chan struct{}),
+		C:      make(chan *gamesvc.Message),
+		logger: tp.log.With().Str("room.id", roomID).Logger(),
+		sock:   sock,
+		player: tp.player,
+		cancel: cancel,
 	}
 
 	ginkgo.DeferCleanup(func() {

@@ -6,18 +6,15 @@ import (
 	"time"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	. "github.com/onsi/gomega"
 	"github.com/rs/zerolog"
 )
 
 type TestPlayerInRoom struct {
-	C         chan *gamesvc.Message
-	RoomState *gamesvc.Room
-	logger    zerolog.Logger
+	C      chan *gamesvc.Message
+	logger zerolog.Logger
 
-	sock      gamesvc.GameService_JoinClient
-	authToken string
-	player    *gamesvc.Player
+	sock   gamesvc.GameService_JoinClient
+	player *gamesvc.Player
 
 	once   sync.Once
 	done   chan struct{}
@@ -48,50 +45,7 @@ func (ctp *TestPlayerInRoom) NextMsg(ctx context.Context) *gamesvc.Message {
 	case <-ctx.Done():
 		return nil
 	case msg := <-ctp.C:
-		ctp.setRoomState(msg)
 		return msg
-	}
-}
-
-func (ctp *TestPlayerInRoom) setRoomState(msg *gamesvc.Message) {
-	state, ok := msg.Message.(*gamesvc.Message_UpdateRoom)
-	if !ok {
-		return
-	}
-
-	ctp.RoomState = state.UpdateRoom.Room
-}
-
-func (ctp *TestPlayerInRoom) Poll(g Gomega) *gamesvc.Message {
-	select {
-	case msg, ok := <-ctp.C:
-		if !ok {
-			panic("channel was closed")
-		}
-
-		if msg, ok := msg.Message.(*gamesvc.Message_Error); ok {
-			panic(msg.Error.Error)
-			// g.ExpectWithOffset(1, msg.Error.Error).Should(BeEmpty())
-		}
-
-		ctp.setRoomState(msg)
-		return msg
-	default:
-		return nil
-	}
-}
-
-func (ctp *TestPlayerInRoom) PollRaw() *gamesvc.Message {
-	select {
-	case msg, ok := <-ctp.C:
-		if !ok {
-			panic("channel was closed")
-		}
-
-		ctp.setRoomState(msg)
-		return msg
-	default:
-		return nil
 	}
 }
 
@@ -170,6 +124,16 @@ func (tpr *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
 			EndTurn: &gamesvc.MsgEndTurn{
 				Rights: rights,
 				Wrongs: wrongs,
+			},
+		},
+	})
+}
+
+func (tpr *TestPlayerInRoom) Word(word string) error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_Word{
+			Word: &gamesvc.MsgWord{
+				Word: word,
 			},
 		},
 	})

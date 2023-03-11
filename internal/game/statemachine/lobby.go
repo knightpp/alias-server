@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/brianvoe/gofakeit/v6"
+	"github.com/google/uuid"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/game/entity"
-	"github.com/knightpp/alias-server/internal/uuidgen"
 	"github.com/life4/genesis/slices"
 )
 
@@ -30,17 +31,29 @@ func (l Lobby) HandleMessage(message *gamesvc.Message, p *entity.Player, r *enti
 }
 
 func (l Lobby) handleCreateTeam(msg *gamesvc.Message_CreateTeam, p *entity.Player, r *entity.Room) (Stater, error) {
-	// TODO: return error if no such user
-	r.RemovePlayer(p.ID)
-
 	team := &entity.Team{
-		ID:      uuidgen.NewString(),
+		ID:      uuid.NewString(),
 		Name:    msg.CreateTeam.Name,
-		PlayerA: p,
+		PlayerA: nil,
 		PlayerB: nil,
 	}
+	if team.Name == "" {
+		team.Name = gofakeit.Vegetable()
+	}
 	r.Teams = append(r.Teams, team)
-	r.AnnounceChange()
+
+	resp := &gamesvc.Message{
+		Message: &gamesvc.Message_TeamCreated{
+			TeamCreated: &gamesvc.MsgTeamCreated{
+				Team: team.ToProto(),
+			},
+		},
+	}
+	err := sendMsgToPlayers(resp, r.GetAllPlayers()...)
+	if err != nil {
+		return l, err
+	}
+
 	return l, nil
 }
 

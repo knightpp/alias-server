@@ -12,6 +12,7 @@ import (
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/memory"
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,12 +25,6 @@ type TestServer struct {
 	addr     string
 	service  *server.GameService
 	log      zerolog.Logger
-}
-
-type constantUUIDGen struct{}
-
-func (c constantUUIDGen) NewString() string {
-	return TestUUID
 }
 
 func CreateAndStart() (*TestServer, error) {
@@ -85,4 +80,28 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 		Str("player.id", player.Id).
 		Logger()
 	return newTestPlayer(client, player, token, log), nil
+}
+
+func (ts *TestServer) JoinPlayers(ctx context.Context, roomID string, players ...*TestPlayer) []*TestPlayerInRoom {
+	inRoom := make([]*TestPlayerInRoom, len(players))
+	for i, player := range players {
+		conn, err := player.Join(roomID)
+		ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
+		ExpectWithOffset(1, conn.NextMsg(ctx).GetUpdateRoom()).ShouldNot(BeNil())
+
+		inRoom[i] = conn
+	}
+
+	return inRoom
+}
+
+func (ts *TestServer) CreatePlayers(ctx context.Context, n int, gen func(n int) *gamesvc.Player) []*TestPlayer {
+	players := make([]*TestPlayer, n)
+	for i := 0; i < n; i++ {
+		player, err := ts.NewPlayer(ctx, gen(i+1))
+		Expect(err).To(BeNil())
+
+		players[i] = player
+	}
+	return players
 }

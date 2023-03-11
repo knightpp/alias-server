@@ -1,6 +1,7 @@
 package statemachine
 
 import (
+	"errors"
 	"fmt"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -17,4 +18,15 @@ type UnknownMessageTypeError struct {
 
 func (err *UnknownMessageTypeError) Error() string {
 	return fmt.Sprintf("unhandled message: %T", err.T)
+}
+
+func sendMsgToPlayers(msg *gamesvc.Message, players ...*entity.Player) error {
+	var errs []error
+	for _, player := range players {
+		err := player.SendMsg(msg)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }

@@ -21,22 +21,28 @@ tasks:
 
   test:
     cmds:
-      - ginkgo run --tags test --fail-fast --randomize-all -r {{.CLI_ARGS}} ./test/
+      - ginkgo run --tags test --fail-fast --randomize-all --randomize-suites -r {{.CLI_ARGS}} ./test/
 
   test-parallel:
     cmds:
-      - ginkgo run --tags test -p --fail-fast --randomize-all -r {{.CLI_ARGS}} ./test/
+      - ginkgo run --tags test -p --fail-fast --randomize-all --randomize-suites -r {{.CLI_ARGS}} ./test/
 
   cover:
     cmds:
-      # -coverpkg=$(fd . internal/ -t d -x echo github.com/knightpp/alias-server/{} | tr '\n' ',') \
       - >
-        go test \
-          -timeout 5s \
-          -tags test \
-          -coverpkg=./... \
-          -coverprofile=coverage.out \
-          ./...
+        pkgs=($(go list ./...)) && IFS=, ; echo "${pkgs[*]}" &&
+        ginkgo run \
+          --timeout 5s \
+          --tags test \
+          -p \
+          --fail-fast \
+          --randomize-all \
+          --randomize-suites \
+          --cover \
+          --coverprofile=coverage.out \
+          --coverpkg="${pkgs[*]}" \
+          -r {{.CLI_ARGS}} \
+          ./test/
       - go tool cover -html=coverage.out
 
   up: "docker compose up {{.CLI_ARGS}}"
