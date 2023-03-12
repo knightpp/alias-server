@@ -83,13 +83,16 @@ func (ts *TestServer) NewPlayer(ctx context.Context, player *gamesvc.Player) (*T
 }
 
 func (ts *TestServer) JoinPlayers(ctx context.Context, roomID string, players ...*TestPlayer) []*TestPlayerInRoom {
-	inRoom := make([]*TestPlayerInRoom, len(players))
-	for i, player := range players {
+	inRoom := make([]*TestPlayerInRoom, 0, len(players))
+	for _, player := range players {
 		conn, err := player.Join(roomID)
-		ExpectWithOffset(1, err).ShouldNot(HaveOccurred())
-		ExpectWithOffset(1, conn.NextMsg(ctx).GetUpdateRoom()).ShouldNot(BeNil())
+		Expect(err).ShouldNot(HaveOccurred())
 
-		inRoom[i] = conn
+		inRoom = append(inRoom, conn)
+
+		for _, inRoomPlayer := range inRoom {
+			Expect(inRoomPlayer.NextMsg(ctx).GetUpdateRoom()).ShouldNot(BeNil())
+		}
 	}
 
 	return inRoom

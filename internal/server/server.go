@@ -10,7 +10,9 @@ import (
 	"github.com/knightpp/alias-server/internal/game"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var _ gamesvc.GameServiceServer = (*GameService)(nil)
@@ -70,17 +72,17 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	roomID, err := singleFieldMD(mdkey.RoomID, md)
 	if err != nil {
-		return fmt.Errorf("get room id from md: %w", err)
+		return status.Errorf(codes.InvalidArgument, "get room id from md: %s", err)
 	}
 
 	authToken, err := singleFieldMD(mdkey.Auth, md)
 	if err != nil {
-		return fmt.Errorf("get auth token from md: %w", err)
+		return status.Errorf(codes.Unauthenticated, "get auth token from md: %s", err)
 	}
 
 	player, err := gs.db.GetPlayer(ctx, authToken)
 	if err != nil {
-		return fmt.Errorf("get player: %w", err)
+		return status.Errorf(codes.Unauthenticated, "get player: %w", err)
 	}
 
 	return gs.game.StartPlayerInRoom(roomID, player, stream)
