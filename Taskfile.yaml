@@ -30,7 +30,7 @@ tasks:
   cover:
     cmds:
       - >
-        pkgs=($(go list ./...)) && IFS=, ; echo "${pkgs[*]}" &&
+        pkgs=($(go list ./...)) && IFS=, &&
         ginkgo run \
           --timeout 5s \
           --tags test \
@@ -44,6 +44,12 @@ tasks:
           -r {{.CLI_ARGS}} \
           ./test/
       - go tool cover -html=coverage.out
+
+  mutation-test:
+    cmds:
+      - >
+        pkgs=($(go list ./...)) && IFS=, &&
+        gremlins unleash --tags test --coverpkg "${pkgs[*]}"
 
   up: "docker compose up {{.CLI_ARGS}}"
 
