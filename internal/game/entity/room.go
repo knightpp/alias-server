@@ -69,19 +69,6 @@ func (r *Room) Cancel() {
 	close(r.done)
 }
 
-func (r *Room) findTeamOfPlayer(id string) *Team {
-	for _, team := range r.Teams {
-		if team.PlayerA != nil && team.PlayerA.ID == id {
-			return team
-		}
-
-		if team.PlayerB != nil && team.PlayerB.ID == id {
-			return team
-		}
-	}
-	return nil
-}
-
 func (r *Room) FindTeamWithPlayer(playerID string) (*Team, bool) {
 	for _, t := range r.Teams {
 		if t.PlayerA != nil && t.PlayerA.ID == playerID {
@@ -107,10 +94,7 @@ func (r *Room) GetAllPlayers() []*Player {
 	}
 
 	players := make([]*Player, 0, count)
-
-	for _, p := range r.Lobby {
-		players = append(players, p)
-	}
+	players = append(players, r.Lobby...)
 	for _, t := range r.Teams {
 		if t.PlayerA != nil {
 			players = append(players, t.PlayerA)

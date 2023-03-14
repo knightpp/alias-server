@@ -1,6 +1,8 @@
 package socket_test
 
 import (
+	"time"
+
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/knightpp/alias-server/internal/testutil/factory"
 	"github.com/knightpp/alias-server/internal/testutil/matcher"
@@ -119,7 +121,7 @@ var _ = Describe("Four players", func() {
 					PlayerB: conn4.Proto(),
 				},
 			)
-	})
+	}, NodeTimeout(time.Second))
 
 	Context("in game", func() {
 		BeforeEach(func(ctx SpecContext) {
@@ -134,10 +136,135 @@ var _ = Describe("Four players", func() {
 			each(func(conn *testserver.TestPlayerInRoom) {
 				Expect(conn.NextMsg(ctx)).Should(match)
 			}, conn1, conn2, conn3, conn4)
-		})
+		}, NodeTimeout(time.Second))
 
 		It("succeed", func() {
 
+		})
+
+		It("when game is not started sending word should error", func(ctx SpecContext) {
+			err := conn1.Word("word")
+
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(conn1.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+		}, NodeTimeout(time.Second))
+
+		Context("in turn", func() {
+			BeforeEach(func(ctx SpecContext) {
+				updFactory = updFactory.WithIsPlaying(true)
+
+				err := conn1.StartTurn(time.Minute)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				each(func(conn *testserver.TestPlayerInRoom) {
+					Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updFactory.Build()))
+				}, conn1, conn2, conn3, conn4)
+			}, NodeTimeout(time.Second))
+
+			When("wrong player", func() {
+				It("sends word", func(ctx SpecContext) {
+					err := conn4.Word("abc")
+
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(conn4.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+				}, NodeTimeout(time.Second))
+
+				It("sends end turn", func(ctx SpecContext) {
+					err := conn3.EndTurn(0, 20)
+
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(conn3.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+				}, NodeTimeout(time.Second))
+
+				It("sends end game", func(ctx SpecContext) {
+					each(func(conn *testserver.TestPlayerInRoom) {
+						err := conn.EndGame()
+						Expect(err).ShouldNot(HaveOccurred())
+						Expect(conn.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+					}, conn2, conn3, conn4)
+				})
+			})
+
+			When("right player", func() {
+				It("sends word", func(ctx SpecContext) {
+					err := conn1.Word("abc")
+
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetWord()).Should(matcher.EqualCmp(&gamesvc.MsgWord{
+							Word: "abc",
+						}))
+					}, conn3, conn4)
+				}, NodeTimeout(time.Second))
+
+				It("sends end turn", func(ctx SpecContext) {
+					err := conn1.EndTurn(10, 15)
+
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
+							Stats: &gamesvc.Statistics{
+								Rights: 10,
+								Wrongs: 15,
+							},
+						}))
+					}, conn2, conn3, conn4)
+				}, NodeTimeout(time.Second))
+
+				It("end game with non zero statistics", func(ctx SpecContext) {
+					By("send word")
+					err := conn1.Word("abc")
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetWord()).Should(matcher.EqualCmp(&gamesvc.MsgWord{
+							Word: "abc",
+						}))
+					}, conn3, conn4)
+
+					By("end turn")
+					err = conn1.EndTurn(10, 15)
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
+							Stats: &gamesvc.Statistics{
+								Rights: 10,
+								Wrongs: 15,
+							},
+						}))
+					}, conn2, conn3, conn4)
+					msg := updFactory.Clone().WithIsPlaying(false).Build()
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(msg))
+					}, conn1, conn2, conn3, conn4)
+
+					By("end game")
+					err = conn1.EndGame()
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetResults()).Should(matcher.EqualCmp(&gamesvc.MsgResults{
+							TeamIdToStats: map[string]*gamesvc.Statistics{
+								firstTeamId: {
+									Rights: 10,
+									Wrongs: 15,
+								},
+							},
+						}))
+					}, conn1, conn2, conn3, conn4)
+				}, NodeTimeout(time.Second))
+			})
+		})
+
+		When("right player", func() {
+			It("sends end game", func(ctx SpecContext) {
+				err := conn1.EndGame()
+
+				Expect(err).ShouldNot(HaveOccurred())
+				each(func(conn *testserver.TestPlayerInRoom) {
+					Expect(conn.NextMsg(ctx).GetResults()).Should(matcher.EqualCmp(&gamesvc.MsgResults{
+						TeamIdToStats: nil,
+					}))
+				}, conn1, conn2, conn3, conn4)
+			}, NodeTimeout(time.Second))
 		})
 	})
 })

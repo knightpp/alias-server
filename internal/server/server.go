@@ -82,7 +82,7 @@ func (gs *GameService) Join(stream gamesvc.GameService_JoinServer) error {
 
 	player, err := gs.db.GetPlayer(ctx, authToken)
 	if err != nil {
-		return status.Errorf(codes.Unauthenticated, "get player: %w", err)
+		return status.Errorf(codes.Unauthenticated, "get player: %s", err)
 	}
 
 	return gs.game.StartPlayerInRoom(roomID, player, stream)

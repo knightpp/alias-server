@@ -122,8 +122,10 @@ func (tpr *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
 	return tpr.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_EndTurn{
 			EndTurn: &gamesvc.MsgEndTurn{
-				Rights: rights,
-				Wrongs: wrongs,
+				Stats: &gamesvc.Statistics{
+					Rights: rights,
+					Wrongs: wrongs,
+				},
 			},
 		},
 	})
@@ -136,5 +138,11 @@ func (tpr *TestPlayerInRoom) Word(word string) error {
 				Word: word,
 			},
 		},
+	})
+}
+
+func (tpr *TestPlayerInRoom) EndGame() error {
+	return tpr.sock.Send(&gamesvc.Message{
+		Message: &gamesvc.Message_EndGame{EndGame: &gamesvc.MsgEndGame{}},
 	})
 }

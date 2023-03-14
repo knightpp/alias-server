@@ -257,8 +257,10 @@ var _ = Describe("TwoPlayer", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(conn2.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(
 					&gamesvc.MsgEndTurn{
-						Rights: 1,
-						Wrongs: 2,
+						Stats: &gamesvc.Statistics{
+							Rights: 1,
+							Wrongs: 2,
+						},
 					},
 				))
 			}, NodeTimeout(time.Second))
@@ -269,19 +271,6 @@ var _ = Describe("TwoPlayer", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(conn2.NextMsg(ctx).GetError()).ShouldNot(BeNil())
 			}, NodeTimeout(time.Second))
-
-			// It("right player can send word", func(ctx SpecContext) {
-			// 	const word = "test"
-
-			// 	err := conn1.Word(word)
-
-			// 	Expect(err).ShouldNot(HaveOccurred())
-			// 	Expect(conn2.NextMsg(ctx).GetWord()).To(matcher.EqualCmp(
-			// 		&gamesvc.MsgWord{
-			// 			Word: word,
-			// 		},
-			// 	))
-			// }, NodeTimeout(time.Second))
 		})
 	})
 })

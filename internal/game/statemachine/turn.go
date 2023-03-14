@@ -14,6 +14,7 @@ var _ Stater = Turn{}
 
 type Turn struct {
 	turnDeadline time.Time
+	prev         Game
 }
 
 func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *entity.Room) (Stater, error) {
@@ -42,8 +43,24 @@ func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *
 		r.IsPlaying = false
 		errs = append(errs, r.AnnounceChange())
 
-		return Game{}, errors.Join(errs...)
+		team, ok := r.FindTeamWithPlayer(r.PlayerIDTurn)
+		if ok {
+			prevStats, ok := t.prev.stats[team.ID]
+			if ok {
+				prevStats.Rights += msg.EndTurn.Stats.Rights
+				prevStats.Wrongs += msg.EndTurn.Stats.Wrongs
+			} else {
+				prevStats = msg.EndTurn.Stats
+			}
+
+			t.prev.stats[team.ID] = prevStats
+		}
+
+		return t.prev, errors.Join(errs...)
 	case *gamesvc.Message_Word:
+		if r.PlayerIDTurn != sender.ID {
+			return t, fmt.Errorf("only player %q can send word", r.PlayerIDTurn)
+		}
 		if time.Now().After(t.turnDeadline) {
 			return t, errors.New("turn deadline exceeded")
 		}
@@ -62,17 +79,13 @@ func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *
 			return p.ID != oponent.ID && p.ID != sender.ID
 		})
 
-		var errs []error
-		for _, p := range players {
-			err := p.SendMsg(&gamesvc.Message{
-				Message: &gamesvc.Message_Word{Word: &gamesvc.MsgWord{}},
-			})
-			if err != nil {
-				errs = append(errs, err)
-			}
-		}
+		err := sendMsgToPlayers(&gamesvc.Message{
+			Message: &gamesvc.Message_Word{Word: &gamesvc.MsgWord{
+				Word: msg.Word.GetWord(),
+			}},
+		}, players...)
 
-		return t, errors.Join(errs...)
+		return t, err
 	default:
 		return t, &UnknownMessageTypeError{T: message.Message}
 	}
