@@ -49,6 +49,42 @@ func (ctp *TestPlayerInRoom) NextMsg(ctx context.Context) *gamesvc.Message {
 	}
 }
 
+func (ctp *TestPlayerInRoom) NextMsgUnpack(ctx context.Context) any {
+	select {
+	case <-ctx.Done():
+		return nil
+	case msg := <-ctp.C:
+		switch msg := msg.Message.(type) {
+		case *gamesvc.Message_Error:
+			return msg.Error
+		case *gamesvc.Message_UpdateRoom:
+			return msg.UpdateRoom
+		case *gamesvc.Message_TransferLeadership:
+			return msg.TransferLeadership
+		case *gamesvc.Message_CreateTeam:
+			return msg.CreateTeam
+		case *gamesvc.Message_TeamCreated:
+			return msg.TeamCreated
+		case *gamesvc.Message_JoinTeam:
+			return msg.JoinTeam
+		case *gamesvc.Message_StartGame:
+			return msg.StartGame
+		case *gamesvc.Message_EndGame:
+			return msg.EndGame
+		case *gamesvc.Message_StartTurn:
+			return msg.StartTurn
+		case *gamesvc.Message_EndTurn:
+			return msg.EndTurn
+		case *gamesvc.Message_Results:
+			return msg.Results
+		case *gamesvc.Message_Word:
+			return msg.Word
+		default:
+			return msg
+		}
+	}
+}
+
 func (ctp *TestPlayerInRoom) ID() string {
 	return ctp.player.Id
 }

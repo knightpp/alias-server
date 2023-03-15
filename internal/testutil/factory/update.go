@@ -34,7 +34,6 @@ func (r *Room) Build() *gamesvc.Message {
 			Langugage:    r.req.Langugage,
 			Lobby:        nil,
 			Teams:        nil,
-			IsPlaying:    false,
 			PlayerIdTurn: "",
 		},
 		Password: nil,
@@ -70,18 +69,6 @@ func (r *Room) WithLobby(players ...*gamesvc.Player) *Room {
 func (r *Room) WithTeams(teams ...*gamesvc.Team) *Room {
 	return r.append(func(ur *gamesvc.UpdateRoom) {
 		ur.Room.Teams = teams
-	})
-}
-
-func (r *Room) WithStartedGame(started bool) *Room {
-	return r.append(func(ur *gamesvc.UpdateRoom) {
-		ur.Room.IsGameStarted = started
-	})
-}
-
-func (r *Room) WithIsPlaying(playing bool) *Room {
-	return r.append(func(ur *gamesvc.UpdateRoom) {
-		ur.Room.IsPlaying = playing
 	})
 }
 

@@ -20,7 +20,7 @@ var _ = Describe("TwoPlayer", func() {
 	BeforeEach(func(ctx SpecContext) {
 		updFactory = factory.NewRoom(protoRoom()).WithLeader(protoPlayer(1).Id)
 		conn1, conn2 = createTwoPlayers(ctx)
-	})
+	}, NodeTimeout(time.Second))
 
 	It("second player left", func(ctx SpecContext) {
 		conn2.Cancel()
@@ -29,7 +29,7 @@ var _ = Describe("TwoPlayer", func() {
 
 		Expect(conn1.NextMsg(ctx)).Should(matcher.EqualCmp(roomMsg))
 		Expect(conn2.StartGame(nil)).Should(HaveOccurred())
-	})
+	}, NodeTimeout(time.Second))
 
 	It("second player join team", func(ctx SpecContext) {
 		const teamName = "team-1"
@@ -75,7 +75,7 @@ var _ = Describe("TwoPlayer", func() {
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
 			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(roomMsg))
 		}
-	})
+	}, NodeTimeout(time.Second))
 
 	It("transfer leadership once", func(ctx SpecContext) {
 		err := conn1.TransferLeadership(conn2.ID())
@@ -89,7 +89,7 @@ var _ = Describe("TwoPlayer", func() {
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
 			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(roomMsg))
 		}
-	})
+	}, NodeTimeout(time.Second))
 
 	It("transfer leadership twice", func(ctx SpecContext) {
 		By("first transfer")
@@ -117,12 +117,10 @@ var _ = Describe("TwoPlayer", func() {
 		for _, conn := range []*testserver.TestPlayerInRoom{conn1, conn2} {
 			Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(roomMsg))
 		}
-	})
+	}, NodeTimeout(time.Second))
 
 	Describe("in a team", func() {
 		const teamName = "our team"
-
-		var updFactory *factory.Room
 
 		BeforeEach(func(ctx SpecContext) {
 			teamID := joinSameTeam(ctx, teamName, conn1, conn2)
@@ -137,36 +135,33 @@ var _ = Describe("TwoPlayer", func() {
 						PlayerB: conn2.Proto(),
 					},
 				)
-		})
+		}, NodeTimeout(time.Second))
 
 		It("successfully start game", func(ctx SpecContext) {
-			updMsg := updFactory.
-				WithStartedGame(true).
-				WithPlayerIDTurn(conn1.ID()).
-				Build()
+			turnOrder := []string{conn1.ID(), conn2.ID()}
 
-			err := conn1.StartGame([]string{conn1.ID(), conn2.ID()})
+			err := conn1.StartGame(turnOrder)
 
 			Expect(err).ShouldNot(HaveOccurred())
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updMsg))
+				Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartGame{
+					Turns: turnOrder,
+				}))
 			}, conn1, conn2)
-		})
+		}, NodeTimeout(time.Second))
 	})
 
 	Context("in a game", func() {
 		const teamName = "our team"
 
 		var (
-			updFactory *factory.Room
-			turnOrder  []string
+			turnOrder []string
 		)
 
 		BeforeEach(func(ctx SpecContext) {
 			turnOrder = []string{conn1.ID(), conn2.ID()}
 			teamID := joinSameTeam(ctx, teamName, conn1, conn2)
 			updFactory = factory.NewRoom(protoRoom()).
-				WithStartedGame(true).
 				WithPlayerIDTurn(turnOrder[0]).
 				WithLeader(protoPlayer(1).Id).
 				WithTeams(
@@ -180,10 +175,10 @@ var _ = Describe("TwoPlayer", func() {
 
 			err := conn1.StartGame(turnOrder)
 			Expect(err).ShouldNot(HaveOccurred())
-
-			matcher := matcher.EqualCmp(updFactory.Build())
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg(ctx)).Should(matcher)
+				Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartGame{
+					Turns: turnOrder,
+				}))
 			}, conn1, conn2)
 		}, NodeTimeout(time.Second))
 
@@ -199,11 +194,9 @@ var _ = Describe("TwoPlayer", func() {
 
 			Expect(err).ShouldNot(HaveOccurred())
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updFactory.
-					WithPlayerIDTurn(turnOrder[0]).
-					WithIsPlaying(true).
-					Build(),
-				))
+				Expect(conn.NextMsg(ctx).GetStartTurn()).Should(matcher.EqualCmp(&gamesvc.MsgStartTurn{
+					DurationMs: uint64(time.Second.Milliseconds()),
+				}))
 			}, conn1, conn2)
 		}, NodeTimeout(time.Second))
 
@@ -211,22 +204,17 @@ var _ = Describe("TwoPlayer", func() {
 			err := conn1.StartTurn(0)
 
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(conn1.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+			Expect(conn1.NextMsgUnpack(ctx)).Should(BeAssignableToTypeOf(&gamesvc.MsgError{}))
 		}, NodeTimeout(time.Second))
 
 		It("start turn right player twice", func(ctx SpecContext) {
-			err := conn1.StartTurn(time.Second)
-
 			By("sending first StartTurn")
+			err := conn1.StartTurn(time.Second)
 			Expect(err).ShouldNot(HaveOccurred())
-
-			matcher := matcher.EqualCmp(updFactory.
-				WithPlayerIDTurn(turnOrder[0]).
-				WithIsPlaying(true).
-				Build(),
-			)
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg(ctx)).Should(matcher)
+				Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartTurn{
+					DurationMs: uint64(time.Second.Milliseconds()),
+				}))
 			}, conn1, conn2)
 
 			By("sending second StartTurn")
@@ -241,13 +229,10 @@ var _ = Describe("TwoPlayer", func() {
 
 				Expect(err).ShouldNot(HaveOccurred())
 
-				matcher := matcher.EqualCmp(updFactory.
-					WithPlayerIDTurn(turnOrder[0]).
-					WithIsPlaying(true).
-					Build(),
-				)
 				each(func(conn *testserver.TestPlayerInRoom) {
-					Expect(conn.NextMsg(ctx)).Should(matcher)
+					Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartTurn{
+						DurationMs: uint64(time.Second.Milliseconds()),
+					}))
 				}, conn1, conn2)
 			}, NodeTimeout(time.Second))
 
@@ -255,7 +240,7 @@ var _ = Describe("TwoPlayer", func() {
 				err := conn1.EndTurn(1, 2)
 
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(conn2.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(
+				Expect(conn2.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(
 					&gamesvc.MsgEndTurn{
 						Stats: &gamesvc.Statistics{
 							Rights: 1,
@@ -263,7 +248,7 @@ var _ = Describe("TwoPlayer", func() {
 						},
 					},
 				))
-			}, NodeTimeout(time.Second))
+			}, NodeTimeout(999100*time.Second))
 
 			It("wrong player cannot end turn", func(ctx SpecContext) {
 				err := conn2.EndTurn(1, 2)

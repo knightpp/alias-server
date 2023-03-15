@@ -125,16 +125,19 @@ var _ = Describe("Four players", func() {
 
 	Context("in game", func() {
 		BeforeEach(func(ctx SpecContext) {
-			updFactory = updFactory.WithStartedGame(true).WithPlayerIDTurn(conn1.ID())
+			updFactory = updFactory.WithPlayerIDTurn(conn1.ID())
 
-			By("start game")
-			err := conn1.StartGame([]string{
+			turnOrder := []string{
 				conn1.ID(), conn2.ID(), conn3.ID(), conn4.ID(),
-			})
+			}
+			By("start game")
+			err := conn1.StartGame(turnOrder)
 			Expect(err).ShouldNot(HaveOccurred())
-			match := matcher.EqualCmp(updFactory.Build())
+			match := matcher.EqualCmp(&gamesvc.MsgStartGame{
+				Turns: turnOrder,
+			})
 			each(func(conn *testserver.TestPlayerInRoom) {
-				Expect(conn.NextMsg(ctx)).Should(match)
+				Expect(conn.NextMsg(ctx).GetStartGame()).Should(match)
 			}, conn1, conn2, conn3, conn4)
 		}, NodeTimeout(time.Second))
 
@@ -146,18 +149,18 @@ var _ = Describe("Four players", func() {
 			err := conn1.Word("word")
 
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(conn1.NextMsg(ctx).GetError()).ShouldNot(BeNil())
+			Expect(conn1.NextMsgUnpack(ctx)).Should(BeAssignableToTypeOf(&gamesvc.MsgError{}))
 		}, NodeTimeout(time.Second))
 
 		Context("in turn", func() {
 			BeforeEach(func(ctx SpecContext) {
-				updFactory = updFactory.WithIsPlaying(true)
-
 				err := conn1.StartTurn(time.Minute)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				each(func(conn *testserver.TestPlayerInRoom) {
-					Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(updFactory.Build()))
+					Expect(conn.NextMsg(ctx).GetStartTurn()).Should(matcher.EqualCmp(&gamesvc.MsgStartTurn{
+						DurationMs: uint64(time.Minute.Milliseconds()),
+					}))
 				}, conn1, conn2, conn3, conn4)
 			}, NodeTimeout(time.Second))
 
@@ -191,7 +194,7 @@ var _ = Describe("Four players", func() {
 
 					Expect(err).ShouldNot(HaveOccurred())
 					each(func(conn *testserver.TestPlayerInRoom) {
-						Expect(conn.NextMsg(ctx).GetWord()).Should(matcher.EqualCmp(&gamesvc.MsgWord{
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgWord{
 							Word: "abc",
 						}))
 					}, conn3, conn4)
@@ -202,7 +205,7 @@ var _ = Describe("Four players", func() {
 
 					Expect(err).ShouldNot(HaveOccurred())
 					each(func(conn *testserver.TestPlayerInRoom) {
-						Expect(conn.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
 							Stats: &gamesvc.Statistics{
 								Rights: 10,
 								Wrongs: 15,
@@ -216,7 +219,7 @@ var _ = Describe("Four players", func() {
 					err := conn1.Word("abc")
 					Expect(err).ShouldNot(HaveOccurred())
 					each(func(conn *testserver.TestPlayerInRoom) {
-						Expect(conn.NextMsg(ctx).GetWord()).Should(matcher.EqualCmp(&gamesvc.MsgWord{
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgWord{
 							Word: "abc",
 						}))
 					}, conn3, conn4)
@@ -225,17 +228,13 @@ var _ = Describe("Four players", func() {
 					err = conn1.EndTurn(10, 15)
 					Expect(err).ShouldNot(HaveOccurred())
 					each(func(conn *testserver.TestPlayerInRoom) {
-						Expect(conn.NextMsg(ctx).GetEndTurn()).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
 							Stats: &gamesvc.Statistics{
 								Rights: 10,
 								Wrongs: 15,
 							},
 						}))
 					}, conn2, conn3, conn4)
-					msg := updFactory.Clone().WithIsPlaying(false).Build()
-					each(func(conn *testserver.TestPlayerInRoom) {
-						Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(msg))
-					}, conn1, conn2, conn3, conn4)
 
 					By("end game")
 					err = conn1.EndGame()
@@ -248,6 +247,55 @@ var _ = Describe("Four players", func() {
 									Wrongs: 15,
 								},
 							},
+						}))
+					}, conn1, conn2, conn3, conn4)
+				}, NodeTimeout(time.Second))
+
+				It("end turn end game start game", func(ctx SpecContext) {
+					By("end turn")
+					err := conn1.EndTurn(10, 10)
+					Expect(err).Should(BeNil())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgEndTurn{
+							Stats: &gamesvc.Statistics{
+								Rights: 10,
+								Wrongs: 10,
+							},
+						}))
+					}, conn2, conn3, conn4)
+
+					By("end game")
+					err = conn1.EndGame()
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsg(ctx).GetResults()).Should(matcher.EqualCmp(&gamesvc.MsgResults{
+							TeamIdToStats: map[string]*gamesvc.Statistics{
+								firstTeamId: {
+									Rights: 10,
+									Wrongs: 10,
+								},
+							},
+						}))
+					}, conn1, conn2, conn3, conn4)
+
+					By("start game")
+					turnOrder := []string{
+						conn1.ID(), conn2.ID(), conn3.ID(), conn4.ID(),
+					}
+					err = conn1.StartGame(turnOrder)
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartGame{
+							Turns: turnOrder,
+						}))
+					}, conn1, conn2, conn3, conn4)
+
+					By("start turn")
+					err = conn1.StartTurn(time.Minute)
+					Expect(err).ShouldNot(HaveOccurred())
+					each(func(conn *testserver.TestPlayerInRoom) {
+						Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartTurn{
+							DurationMs: uint64(time.Minute.Milliseconds()),
 						}))
 					}, conn1, conn2, conn3, conn4)
 				}, NodeTimeout(time.Second))

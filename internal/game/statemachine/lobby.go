@@ -92,33 +92,49 @@ func (l Lobby) handleTransferLeadership(msg *gamesvc.Message_TransferLeadership,
 	return l, nil
 }
 
-func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, p *entity.Player, r *entity.Room) (Stater, error) {
-	if r.LeaderId != p.ID {
+func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, sender *entity.Player, r *entity.Room) (Stater, error) {
+	if r.LeaderId != sender.ID {
 		return l, errors.New("only leader id can start game")
 	}
 
 	if len(r.Teams) == 0 {
 		return l, entity.ErrStartNoTeams
 	}
+
+	turns := msg.StartGame.GetTurns()
+	if len(turns) == 0 {
+		return l, fmt.Errorf("turns should not be empty")
+	}
+
 	for _, team := range r.Teams {
 		if team.PlayerA == nil || team.PlayerB == nil {
 			return l, entity.ErrStartIncompleteTeam
 		}
 	}
 
-	firstTeam := r.Teams[0]
-	switch {
-	case firstTeam.PlayerA != nil:
-		r.PlayerIDTurn = firstTeam.PlayerA.ID
-	case firstTeam.PlayerB != nil:
-		r.PlayerIDTurn = firstTeam.PlayerB.ID
-	default:
-		return l, errors.New("no players in the first team")
+	ok := r.HasPlayer(turns[0])
+	if !ok {
+		return l, fmt.Errorf("cannot start game: no player with %q id", turns[0])
 	}
 
-	r.IsGameStarted = true
+	// players := fp.FilterInPlace(r.GetAllPlayers(), func(p *entity.Player) bool {
+	// 	return p.ID != sender.ID
+	// })
+	players := r.GetAllPlayers()
 
-	r.AnnounceChange()
+	err := sendMsgToPlayers(&gamesvc.Message{
+		Message: &gamesvc.Message_StartGame{
+			StartGame: &gamesvc.MsgStartGame{
+				Turns: turns,
+			},
+		},
+	}, players...)
+	if err != nil {
+		return l, err
+	}
 
-	return Game{}, nil
+	return Game{
+		stats: make(map[string]*gamesvc.Statistics),
+		turns: msg.StartGame.Turns,
+	}, nil
 }

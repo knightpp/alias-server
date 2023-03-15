@@ -13,6 +13,7 @@ var _ Stater = Game{}
 
 type Game struct {
 	stats map[string]*gamesvc.Statistics
+	turns []string
 }
 
 func (g Game) HandleMessage(message *gamesvc.Message, p *entity.Player, r *entity.Room) (Stater, error) {
@@ -27,31 +28,28 @@ func (g Game) HandleMessage(message *gamesvc.Message, p *entity.Player, r *entit
 }
 
 func (g Game) handleStartTurn(msg *gamesvc.Message_StartTurn, p *entity.Player, r *entity.Room) (Stater, error) {
-	if r.IsPlaying {
-		return g, errors.New("turn already started")
-	}
-	if p.ID != r.PlayerIDTurn {
+	if p.ID != g.turns[0] {
 		return g, fmt.Errorf("only player with %s id can start next turn", r.PlayerIDTurn)
 	}
 	if msg.StartTurn.DurationMs == 0 {
 		return g, errors.New("could not start turn with 0 duration")
 	}
 
-	r.IsPlaying = true
-
-	err := r.AnnounceChange()
+	err := sendMsgToPlayers(&gamesvc.Message{
+		Message: &gamesvc.Message_StartTurn{
+			StartTurn: &gamesvc.MsgStartTurn{
+				DurationMs: msg.StartTurn.GetDurationMs(),
+			},
+		},
+	}, r.GetAllPlayers()...)
 	if err != nil {
 		return nil, err
 	}
 
-	if g.stats == nil {
-		g.stats = make(map[string]*gamesvc.Statistics, len(r.Teams))
-	}
+	r.PlayerIDTurn = g.turns[0]
 
-	return Turn{
-		turnDeadline: time.Now().Add(time.Duration(msg.StartTurn.DurationMs) * time.Millisecond),
-		prev:         g,
-	}, nil
+	deadline := time.Now().Add(time.Duration(msg.StartTurn.DurationMs) * time.Millisecond)
+	return newTurn(deadline, g), nil
 }
 
 func (g Game) handleEndGame(msg *gamesvc.Message_EndGame, sender *entity.Player, r *entity.Room) (Stater, error) {

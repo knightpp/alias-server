@@ -17,6 +17,13 @@ type Turn struct {
 	prev         Game
 }
 
+func newTurn(deadline time.Time, prev Game) Turn {
+	return Turn{
+		turnDeadline: deadline,
+		prev:         prev,
+	}
+}
+
 func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *entity.Room) (Stater, error) {
 	switch msg := message.Message.(type) {
 	case *gamesvc.Message_EndTurn:
@@ -28,20 +35,14 @@ func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *
 			return p.ID != sender.ID
 		})
 
-		var errs []error
-		for _, p := range players {
-			err := p.SendMsg(&gamesvc.Message{
-				Message: &gamesvc.Message_EndTurn{
-					EndTurn: msg.EndTurn,
-				},
-			})
-			if err != nil {
-				errs = append(errs, err)
-			}
+		err := sendMsgToPlayers(&gamesvc.Message{
+			Message: &gamesvc.Message_EndTurn{
+				EndTurn: msg.EndTurn,
+			},
+		}, players...)
+		if err != nil {
+			return t, err
 		}
-
-		r.IsPlaying = false
-		errs = append(errs, r.AnnounceChange())
 
 		team, ok := r.FindTeamWithPlayer(r.PlayerIDTurn)
 		if ok {
@@ -56,7 +57,7 @@ func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *
 			t.prev.stats[team.ID] = prevStats
 		}
 
-		return t.prev, errors.Join(errs...)
+		return t.prev, nil
 	case *gamesvc.Message_Word:
 		if r.PlayerIDTurn != sender.ID {
 			return t, fmt.Errorf("only player %q can send word", r.PlayerIDTurn)
