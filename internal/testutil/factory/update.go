@@ -27,14 +27,13 @@ func (r *Room) Clone() *Room {
 func (r *Room) Build() *gamesvc.Message {
 	msg := &gamesvc.UpdateRoom{
 		Room: &gamesvc.Room{
-			Id:           testserver.TestUUID,
-			Name:         r.req.Name,
-			LeaderId:     "",
-			IsPublic:     r.req.IsPublic,
-			Langugage:    r.req.Langugage,
-			Lobby:        nil,
-			Teams:        nil,
-			PlayerIdTurn: "",
+			Id:        testserver.TestUUID,
+			Name:      r.req.Name,
+			LeaderId:  "",
+			IsPublic:  r.req.IsPublic,
+			Langugage: r.req.Langugage,
+			Lobby:     nil,
+			Teams:     nil,
 		},
 		Password: nil,
 	}
@@ -69,12 +68,6 @@ func (r *Room) WithLobby(players ...*gamesvc.Player) *Room {
 func (r *Room) WithTeams(teams ...*gamesvc.Team) *Room {
 	return r.append(func(ur *gamesvc.UpdateRoom) {
 		ur.Room.Teams = teams
-	})
-}
-
-func (r *Room) WithPlayerIDTurn(id string) *Room {
-	return r.append(func(ur *gamesvc.UpdateRoom) {
-		ur.Room.PlayerIdTurn = id
 	})
 }
 

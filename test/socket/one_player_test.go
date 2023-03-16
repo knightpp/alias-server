@@ -50,7 +50,7 @@ var _ = Describe("OnePlayer", func() {
 	})
 
 	It("start game when no teams", func(ctx SpecContext) {
-		err := conn.StartGame([]string{conn.ID()})
+		err := conn.StartGame(conn.ID())
 		Expect(err).ShouldNot(HaveOccurred())
 
 		expectedErr := game.ErrRoomNoTeams
@@ -84,7 +84,7 @@ var _ = Describe("OnePlayer", func() {
 
 		By("start game")
 
-		err = conn.StartGame([]string{conn.ID()})
+		err = conn.StartGame(conn.ID())
 		Expect(err).ShouldNot(HaveOccurred())
 		expectedErr := game.ErrRoomIncompleteTeam
 		Expect(conn.NextMsg(ctx)).Should(matcher.EqualCmp(&gamesvc.Message{

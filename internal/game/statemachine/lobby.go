@@ -16,15 +16,15 @@ var _ Stater = Game{}
 type Lobby struct{}
 
 func (l Lobby) HandleMessage(message *gamesvc.Message, p *entity.Player, r *entity.Room) (Stater, error) {
-	switch v := message.Message.(type) {
+	switch msg := message.Message.(type) {
 	case *gamesvc.Message_CreateTeam:
-		return l.handleCreateTeam(v, p, r)
+		return l.handleCreateTeam(msg, p, r)
 	case *gamesvc.Message_JoinTeam:
-		return l.handleJoinTeam(v, p, r)
+		return l.handleJoinTeam(msg, p, r)
 	case *gamesvc.Message_TransferLeadership:
-		return l.handleTransferLeadership(v, p, r)
+		return l.handleTransferLeadership(msg, p, r)
 	case *gamesvc.Message_StartGame:
-		return l.handleStartGame(v, p, r)
+		return l.handleStartGame(msg.StartGame, p, r)
 	default:
 		return l, &UnknownMessageTypeError{T: message.Message}
 	}
@@ -92,7 +92,7 @@ func (l Lobby) handleTransferLeadership(msg *gamesvc.Message_TransferLeadership,
 	return l, nil
 }
 
-func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, sender *entity.Player, r *entity.Room) (Stater, error) {
+func (l Lobby) handleStartGame(msg *gamesvc.MsgStartGame, sender *entity.Player, r *entity.Room) (Stater, error) {
 	if r.LeaderId != sender.ID {
 		return l, errors.New("only leader id can start game")
 	}
@@ -101,9 +101,9 @@ func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, sender *entity.Pl
 		return l, entity.ErrStartNoTeams
 	}
 
-	turns := msg.StartGame.GetTurns()
-	if len(turns) == 0 {
-		return l, fmt.Errorf("turns should not be empty")
+	nextTurn := msg.GetNextPlayerTurn()
+	if nextTurn == "" {
+		return l, fmt.Errorf("next player turn should not be empty")
 	}
 
 	for _, team := range r.Teams {
@@ -112,20 +112,17 @@ func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, sender *entity.Pl
 		}
 	}
 
-	ok := r.HasPlayer(turns[0])
+	ok := r.HasPlayer(nextTurn)
 	if !ok {
-		return l, fmt.Errorf("cannot start game: no player with %q id", turns[0])
+		return l, fmt.Errorf("cannot start game: no player with %q id", nextTurn)
 	}
 
-	// players := fp.FilterInPlace(r.GetAllPlayers(), func(p *entity.Player) bool {
-	// 	return p.ID != sender.ID
-	// })
 	players := r.GetAllPlayers()
 
 	err := sendMsgToPlayers(&gamesvc.Message{
 		Message: &gamesvc.Message_StartGame{
 			StartGame: &gamesvc.MsgStartGame{
-				Turns: turns,
+				NextPlayerTurn: nextTurn,
 			},
 		},
 	}, players...)
@@ -134,7 +131,7 @@ func (l Lobby) handleStartGame(msg *gamesvc.Message_StartGame, sender *entity.Pl
 	}
 
 	return Game{
-		stats: make(map[string]*gamesvc.Statistics),
-		turns: msg.StartGame.Turns,
+		stats:        make(map[string]*gamesvc.Statistics),
+		playerIDTurn: nextTurn,
 	}, nil
 }

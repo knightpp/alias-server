@@ -28,7 +28,7 @@ var _ = Describe("TwoPlayer", func() {
 		roomMsg := updFactory.WithLobby(conn1.Proto()).Build()
 
 		Expect(conn1.NextMsg(ctx)).Should(matcher.EqualCmp(roomMsg))
-		Expect(conn2.StartGame(nil)).Should(HaveOccurred())
+		Expect(conn2.StartGame("")).Should(HaveOccurred())
 	}, NodeTimeout(time.Second))
 
 	It("second player join team", func(ctx SpecContext) {
@@ -138,14 +138,12 @@ var _ = Describe("TwoPlayer", func() {
 		}, NodeTimeout(time.Second))
 
 		It("successfully start game", func(ctx SpecContext) {
-			turnOrder := []string{conn1.ID(), conn2.ID()}
-
-			err := conn1.StartGame(turnOrder)
+			err := conn1.StartGame(conn1.ID())
 
 			Expect(err).ShouldNot(HaveOccurred())
 			each(func(conn *testserver.TestPlayerInRoom) {
 				Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartGame{
-					Turns: turnOrder,
+					NextPlayerTurn: conn1.ID(),
 				}))
 			}, conn1, conn2)
 		}, NodeTimeout(time.Second))
@@ -154,30 +152,14 @@ var _ = Describe("TwoPlayer", func() {
 	Context("in a game", func() {
 		const teamName = "our team"
 
-		var (
-			turnOrder []string
-		)
-
 		BeforeEach(func(ctx SpecContext) {
-			turnOrder = []string{conn1.ID(), conn2.ID()}
-			teamID := joinSameTeam(ctx, teamName, conn1, conn2)
-			updFactory = factory.NewRoom(protoRoom()).
-				WithPlayerIDTurn(turnOrder[0]).
-				WithLeader(protoPlayer(1).Id).
-				WithTeams(
-					&gamesvc.Team{
-						Id:      teamID,
-						Name:    teamName,
-						PlayerA: conn1.Proto(),
-						PlayerB: conn2.Proto(),
-					},
-				)
+			_ = joinSameTeam(ctx, teamName, conn1, conn2)
 
-			err := conn1.StartGame(turnOrder)
+			err := conn1.StartGame(conn1.ID())
 			Expect(err).ShouldNot(HaveOccurred())
 			each(func(conn *testserver.TestPlayerInRoom) {
 				Expect(conn.NextMsgUnpack(ctx)).Should(matcher.EqualCmp(&gamesvc.MsgStartGame{
-					Turns: turnOrder,
+					NextPlayerTurn: conn1.ID(),
 				}))
 			}, conn1, conn2)
 		}, NodeTimeout(time.Second))

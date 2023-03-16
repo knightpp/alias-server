@@ -134,11 +134,11 @@ func (tpr *TestPlayerInRoom) TransferLeadership(playerID string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) StartGame(turns []string) error {
+func (tpr *TestPlayerInRoom) StartGame(nextPlayerIDTurn string) error {
 	return tpr.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_StartGame{
 			StartGame: &gamesvc.MsgStartGame{
-				Turns: turns,
+				NextPlayerTurn: nextPlayerIDTurn,
 			},
 		},
 	})
