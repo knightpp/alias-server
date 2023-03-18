@@ -134,6 +134,7 @@ func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *Player] {
 	return r.allMsgChan
 }
 
+// Do queues for execution. It's async method.
 func (r *Room) Do(fn func(r *Room)) {
 	select {
 	case r.actorChan <- fn:

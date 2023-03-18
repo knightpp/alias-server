@@ -6,6 +6,8 @@ require (
 	github.com/brianvoe/gofakeit/v6 v6.20.2
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
+	github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2 v2.0.0-rc.3
+	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.3
 	github.com/huandu/go-clone/generic v1.5.1
 	github.com/knightpp/alias-proto/go v0.0.0-20230315201435-de7492773464
 	github.com/life4/genesis v1.1.0

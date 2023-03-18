@@ -5,6 +5,9 @@ import (
 	"net"
 	"os"
 
+	zerologmid "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	loginsvc "github.com/knightpp/alias-proto/go/login_service"
 	"github.com/knightpp/alias-server/internal/loginservice"
@@ -16,7 +19,11 @@ import (
 )
 
 func main() {
-	log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).Level(zerolog.TraceLevel)
+	log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
+		With().
+		Timestamp().
+		Logger().
+		Level(zerolog.TraceLevel)
 
 	if err := run(log); err != nil {
 		log.Fatal().Err(err).Msg("server failed")
@@ -48,7 +55,17 @@ func run(log zerolog.Logger) error {
 
 	log.Info().Str("addr", addr).Msg("starting GRPC server")
 
-	grpcServer := grpc.NewServer()
+	grpcLog := zerologmid.InterceptorLogger(log)
+	grpcServer := grpc.NewServer(
+		grpc.ChainStreamInterceptor(
+			logging.StreamServerInterceptor(grpcLog),
+			recovery.StreamServerInterceptor(),
+		),
+		grpc.ChainUnaryInterceptor(
+			logging.UnaryServerInterceptor(grpcLog),
+			recovery.UnaryServerInterceptor(),
+		),
+	)
 	gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
 	loginsvc.RegisterLoginServiceServer(grpcServer, loginservice.New(playerDB))
 	return grpcServer.Serve(lis)

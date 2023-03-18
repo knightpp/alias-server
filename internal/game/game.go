@@ -73,9 +73,10 @@ func (g *Game) ListRooms() []*gamesvc.Room {
 
 	roomsProto := make([]*gamesvc.Room, 0, len(g.rooms))
 	for _, r := range g.rooms {
-		r.Do(func(r *entity.Room) {
-			roomsProto = append(roomsProto, r.GetProto())
+		proto := runFn1(r, func(r *entity.Room) *gamesvc.Room {
+			return r.GetProto()
 		})
+		roomsProto = append(roomsProto, proto)
 	}
 
 	return roomsProto
