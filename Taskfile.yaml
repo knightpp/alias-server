@@ -51,6 +51,6 @@ tasks:
         pkgs=($(go list ./...)) && IFS=, &&
         gremlins unleash --tags test --coverpkg "${pkgs[*]}"
 
-  up: "docker compose up {{.CLI_ARGS}}"
+  up: "docker compose up --build {{.CLI_ARGS}}"
 
   gen: go generate ./...

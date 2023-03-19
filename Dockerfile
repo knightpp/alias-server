@@ -1,6 +1,4 @@
-FROM docker.io/golang:1.20.1-alpine as builder
-
-ENV GIN_MODE=release
+FROM docker.io/golang:1.20.2-alpine as builder
 
 RUN go install github.com/go-task/task/v3/cmd/task@latest && \
 	go clean -modcache
@@ -10,6 +8,7 @@ WORKDIR /src/alias-server
 
 COPY . .
 
+ENV CGO_ENABLED="0"
 RUN task build
 
 FROM scratch

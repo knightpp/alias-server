@@ -27,7 +27,7 @@ func newTurn(deadline time.Time, prev Game) Turn {
 func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *entity.Room) (Stater, error) {
 	switch msg := message.Message.(type) {
 	case *gamesvc.Message_EndTurn:
-		return t.handeEndTurn(msg.EndTurn, sender, r)
+		return t.handleEndTurn(msg.EndTurn, sender, r)
 	case *gamesvc.Message_Word:
 		return t.handleWord(msg.Word, sender, r)
 	default:
@@ -35,7 +35,7 @@ func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *
 	}
 }
 
-func (t Turn) handeEndTurn(msg *gamesvc.MsgEndTurn, sender *entity.Player, r *entity.Room) (Stater, error) {
+func (t Turn) handleEndTurn(msg *gamesvc.MsgEndTurn, sender *entity.Player, r *entity.Room) (Stater, error) {
 	if sender.ID != t.prev.playerIDTurn {
 		return t, fmt.Errorf("only %q player can end turn", t.prev.playerIDTurn)
 	}
