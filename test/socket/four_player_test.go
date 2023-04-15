@@ -290,7 +290,7 @@ var _ = Describe("Four players", func() {
 	})
 
 	Context("test state transitions", func() {
-		FIt("lobby -> game -> turn -> game -> lobby", func(ctx SpecContext) {
+		It("lobby -> game -> turn -> game -> lobby", func(ctx SpecContext) {
 			By("start game")
 			err := conn1.StartGame(conn1.ID())
 			Expect(err).ShouldNot(HaveOccurred())
