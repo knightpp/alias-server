@@ -1,11 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 
-	zerologmid "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -55,7 +55,7 @@ func run(log zerolog.Logger) error {
 
 	log.Info().Str("addr", addr).Msg("starting GRPC server")
 
-	grpcLog := zerologmid.InterceptorLogger(log)
+	grpcLog := interceptorLogger(log)
 	grpcServer := grpc.NewServer(
 		grpc.ChainStreamInterceptor(
 			logging.StreamServerInterceptor(grpcLog),
@@ -69,4 +69,23 @@ func run(log zerolog.Logger) error {
 	gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
 	loginsvc.RegisterLoginServiceServer(grpcServer, loginservice.New(playerDB))
 	return grpcServer.Serve(lis)
+}
+
+func interceptorLogger(l zerolog.Logger) logging.Logger {
+	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
+		l = l.With().Fields(fields).Logger()
+
+		switch lvl {
+		case logging.LevelDebug:
+			l.Debug().Msg(msg)
+		case logging.LevelInfo:
+			l.Info().Msg(msg)
+		case logging.LevelWarn:
+			l.Warn().Msg(msg)
+		case logging.LevelError:
+			l.Error().Msg(msg)
+		default:
+			panic(fmt.Sprintf("unknown level %v", lvl))
+		}
+	})
 }
