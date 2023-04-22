@@ -104,8 +104,8 @@ func (ctp *TestPlayerInRoom) Cancel() {
 	})
 }
 
-func (tpr *TestPlayerInRoom) CreateTeam(name string) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) CreateTeam(name string) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_CreateTeam{
 			CreateTeam: &gamesvc.MsgCreateTeam{
 				Name: name,
@@ -114,8 +114,8 @@ func (tpr *TestPlayerInRoom) CreateTeam(name string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) JoinTeam(id string) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) JoinTeam(id string) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_JoinTeam{
 			JoinTeam: &gamesvc.MsgJoinTeam{
 				TeamId: id,
@@ -124,8 +124,8 @@ func (tpr *TestPlayerInRoom) JoinTeam(id string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) TransferLeadership(playerID string) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) TransferLeadership(playerID string) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_TransferLeadership{
 			TransferLeadership: &gamesvc.MsgTransferLeadership{
 				PlayerId: playerID,
@@ -134,8 +134,8 @@ func (tpr *TestPlayerInRoom) TransferLeadership(playerID string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) StartGame(nextPlayerIDTurn string) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) StartGame(nextPlayerIDTurn string) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_StartGame{
 			StartGame: &gamesvc.MsgStartGame{
 				NextPlayerTurn: nextPlayerIDTurn,
@@ -144,8 +144,8 @@ func (tpr *TestPlayerInRoom) StartGame(nextPlayerIDTurn string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) StartTurn(duration time.Duration) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) StartTurn(duration time.Duration) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_StartTurn{
 			StartTurn: &gamesvc.MsgStartTurn{
 				DurationMs: uint64(duration.Milliseconds()),
@@ -154,8 +154,8 @@ func (tpr *TestPlayerInRoom) StartTurn(duration time.Duration) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_EndTurn{
 			EndTurn: &gamesvc.MsgEndTurn{
 				Stats: &gamesvc.Statistics{
@@ -167,8 +167,8 @@ func (tpr *TestPlayerInRoom) EndTurn(rights, wrongs uint32) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) Word(word string) error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) Word(word string) error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_Word{
 			Word: &gamesvc.MsgWord{
 				Word: word,
@@ -177,8 +177,8 @@ func (tpr *TestPlayerInRoom) Word(word string) error {
 	})
 }
 
-func (tpr *TestPlayerInRoom) EndGame() error {
-	return tpr.sock.Send(&gamesvc.Message{
+func (ctp *TestPlayerInRoom) EndGame() error {
+	return ctp.sock.Send(&gamesvc.Message{
 		Message: &gamesvc.Message_EndGame{EndGame: &gamesvc.MsgEndGame{}},
 	})
 }
