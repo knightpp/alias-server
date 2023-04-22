@@ -25,7 +25,7 @@ import (
 var (
 	ngrokFlag     = flag.Bool("ngrok", false, "starts ngrok tunnel")
 	ngrokAuthFlag = flag.String("ngrok-auth", "2Omz9oTCclkfVSwCFf8GBFsDt5E_7rmnvXs7aUePuNh8pGzmc", "auth token for ngrok")
-	addrFlag      = flag.String("addr", "127.0.0.1:8080", "addrs to listen to")
+	addrFlag      = flag.String("addr", "0.0.0.0:8080", "addrs to listen to")
 )
 
 func main() {
