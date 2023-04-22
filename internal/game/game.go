@@ -62,7 +62,13 @@ func (g *Game) CreateRoom(
 			}
 		}
 	}()
-	go r.Start()
+	go func() {
+		r.Start()
+
+		g.roomsMu.Lock()
+		delete(g.rooms, roomID)
+		g.roomsMu.Unlock()
+	}()
 
 	g.roomsMu.Lock()
 	g.rooms[roomID] = r
