@@ -89,6 +89,6 @@ func (p *Player) SendError(err string) error {
 	})
 }
 
-func (p *Player) Chan() chan *gamesvc.Message {
+func (p *Player) Chan() <-chan *gamesvc.Message {
 	return p.msgChan
 }
