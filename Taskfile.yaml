@@ -19,6 +19,14 @@ tasks:
       - go build -o server ./cmd/server/main.go
       - strip server
 
+  build-win:
+    env:
+      CGO_ENABLED: 0
+      GOOS: windows
+      GOARCH: amd64
+    cmds:
+      - go build -o server.exe ./cmd/server/main.go
+
   test:
     cmds:
       - ginkgo run --tags test --fail-fast --randomize-all --randomize-suites -r {{.CLI_ARGS}} ./test/
