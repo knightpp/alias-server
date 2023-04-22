@@ -8,6 +8,8 @@ import (
 	loginsvc "github.com/knightpp/alias-proto/go/login_service"
 	"github.com/knightpp/alias-server/internal/gravatar"
 	"github.com/knightpp/alias-server/internal/storage"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var _ loginsvc.LoginServiceServer = (*LoginService)(nil)
@@ -45,4 +47,16 @@ func (l *LoginService) LoginGuest(ctx context.Context, req *loginsvc.LoginGuestR
 			Email:     req.Email,
 		},
 	}, nil
+}
+
+func (l *LoginService) VerifyToken(
+	ctx context.Context,
+	req *loginsvc.VerifyTokenRequest,
+) (*loginsvc.VerifyTokenResponse, error) {
+	p, _ := l.db.GetPlayer(ctx, req.Token)
+	if p == nil {
+		return nil, status.Error(codes.NotFound, "token not found")
+	}
+
+	return &loginsvc.VerifyTokenResponse{}, nil
 }
