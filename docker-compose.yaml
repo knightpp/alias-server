@@ -3,6 +3,7 @@ version: "3"
 services:
   redis:
     image: docker.io/redis:7-alpine
+    pull_policy: always
     volumes:
       - "./cache/redis:/data:rw"
     ports:
