@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"sync"
+	"context"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
 	"github.com/rs/zerolog"
@@ -15,8 +15,6 @@ type Player struct {
 
 	Room *Room
 
-	once    sync.Once
-	done    chan struct{}
 	msgChan chan *gamesvc.Message
 	socket  gamesvc.GameService_JoinServer
 	log     zerolog.Logger
@@ -39,7 +37,6 @@ func NewPlayer(
 			Str("player-name", proto.Name).
 			Logger(),
 		socket:  socket,
-		done:    make(chan struct{}),
 		msgChan: make(chan *gamesvc.Message),
 	}
 }
@@ -56,7 +53,7 @@ func (p *Player) ToProto() *gamesvc.Player {
 	}
 }
 
-func (p *Player) Start() error {
+func (p *Player) Start(ctx context.Context) error {
 	for {
 		msg, err := p.socket.Recv()
 		if err != nil {
@@ -70,18 +67,12 @@ func (p *Player) Start() error {
 		}
 
 		select {
-		case <-p.done:
+		case <-ctx.Done():
 			return nil
 		case p.msgChan <- msg:
 			continue
 		}
 	}
-}
-
-func (p *Player) Cancel() {
-	p.once.Do(func() {
-		close(p.done)
-	})
 }
 
 func (p *Player) SendMsg(msg *gamesvc.Message) error {

@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"context"
 	"errors"
 
 	gamesvc "github.com/knightpp/alias-proto/go/game_service"
@@ -24,9 +25,10 @@ type Room struct {
 	Lobby     []*Player
 	Teams     []*Team
 
+	ctx        context.Context
+	cancel     func()
 	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
 	actorChan  chan func(*Room)
-	done       chan struct{}
 	log        zerolog.Logger
 }
 
@@ -35,10 +37,12 @@ func NewRoom(
 	roomID, leaderID string,
 	req *gamesvc.CreateRoomRequest,
 ) *Room {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Room{
+		ctx:        ctx,
+		cancel:     cancel,
 		log:        log.With().Str("room-id", roomID).Logger(),
 		actorChan:  make(chan func(*Room)),
-		done:       make(chan struct{}),
 		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *Player]),
 
 		Id:        roomID,
@@ -56,14 +60,14 @@ func (r *Room) Start() {
 		case fn := <-r.actorChan:
 			fn(r)
 
-		case <-r.done:
+		case <-r.ctx.Done():
 			return
 		}
 	}
 }
 
 func (r *Room) Cancel() {
-	close(r.done)
+	r.cancel()
 }
 
 func (r *Room) FindTeamWithPlayer(playerID string) (*Team, bool) {
@@ -126,8 +130,8 @@ func (r *Room) GetProto() *gamesvc.Room {
 	}
 }
 
-func (r *Room) Done() chan struct{} {
-	return r.done
+func (r *Room) Ctx() context.Context {
+	return r.ctx
 }
 
 func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *Player] {
@@ -138,8 +142,22 @@ func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *Player] {
 func (r *Room) Do(fn func(r *Room)) {
 	select {
 	case r.actorChan <- fn:
-	case <-r.done:
+	case <-r.ctx.Done():
 	}
+}
+
+func (r *Room) IsEmpty() bool {
+	if len(r.Lobby) != 0 {
+		return false
+	}
+
+	for _, team := range r.Teams {
+		if team.PlayerA != nil || team.PlayerB != nil {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (r *Room) HasPlayer(playerID string) bool {

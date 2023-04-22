@@ -1,6 +1,7 @@
 package game
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -47,15 +48,18 @@ func (g *Game) CreateRoom(
 		state := statemachine.Stater(statemachine.Lobby{})
 
 		for {
-			tuple := <-r.AggregationChan()
-
-			r.Do(func(r *entity.Room) {
-				var err error
-				state, err = state.HandleMessage(tuple.A, tuple.B, r)
-				if err != nil {
-					_ = tuple.B.SendError(err.Error())
-				}
-			})
+			select {
+			case <-r.Ctx().Done():
+				return
+			case tuple := <-r.AggregationChan():
+				r.Do(func(r *entity.Room) {
+					var err error
+					state, err = state.HandleMessage(tuple.A, tuple.B, r)
+					if err != nil {
+						_ = tuple.B.SendError(err.Error())
+					}
+				})
+			}
 		}
 	}()
 	go r.Start()
@@ -109,11 +113,12 @@ func (g *Game) StartPlayerInRoom(
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(r.Ctx())
+
 	go func() {
 		for {
 			select {
-			case <-r.Done():
-				player.Cancel()
+			case <-ctx.Done():
 				return
 
 			case msg, ok := <-player.Chan():
@@ -124,14 +129,15 @@ func (g *Game) StartPlayerInRoom(
 				select {
 				case r.AggregationChan() <- tuple.NewT2(msg, player):
 					continue
-				case <-r.Done():
+				case <-ctx.Done():
 					return
 				}
 			}
 		}
 	}()
 
-	err = player.Start()
+	err = player.Start(ctx)
+	cancel()
 	if err != nil {
 		if status.Code(err) != codes.Canceled {
 			g.log.
@@ -141,18 +147,23 @@ func (g *Game) StartPlayerInRoom(
 				Msg("tried to send message and something went wrong")
 		}
 
-		r.Do(func(r *entity.Room) {
-			ok := r.RemovePlayer(player.ID)
-			if !ok {
-				return
-			}
-
-			r.AnnounceChange()
-		})
-		return fmt.Errorf("player loop: %w", err)
+		err = fmt.Errorf("player loop: %w", err)
 	}
 
-	return nil
+	r.Do(func(r *entity.Room) {
+		needsAnnounce := r.RemovePlayer(player.ID)
+
+		if r.IsEmpty() {
+			r.Cancel()
+			return
+		}
+
+		if needsAnnounce {
+			r.AnnounceChange()
+		}
+	})
+
+	return err
 }
 
 func runFn1[R1 any](r *entity.Room, fn func(r *entity.Room) R1) R1 {
