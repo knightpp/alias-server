@@ -4,13 +4,15 @@ kill_timeout = 5
 processes = []
 
 [env]
+USE_H2C = "1"
+PORT = "443"
 
 [experimental]
 auto_rollback = true
 
 [[services]]
 http_checks = []
-internal_port = 8080
+internal_port = 443
 processes = ["app"]
 protocol = "tcp"
 script_checks = []

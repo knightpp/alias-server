@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -19,14 +20,32 @@ import (
 	"github.com/rs/zerolog"
 	"golang.ngrok.com/ngrok"
 	"golang.ngrok.com/ngrok/config"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 )
 
 var (
 	ngrokFlag     = flag.Bool("ngrok", false, "starts ngrok tunnel")
 	ngrokAuthFlag = flag.String("ngrok-auth", "2Omz9oTCclkfVSwCFf8GBFsDt5E_7rmnvXs7aUePuNh8pGzmc", "auth token for ngrok")
-	addrFlag      = flag.String("addr", "0.0.0.0:8080", "addrs to listen to")
+	addr          string
+	useH2C        bool
 )
+
+func init() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	h2c := false
+	if os.Getenv("USE_H2C") == "1" {
+		h2c = true
+	}
+
+	flag.StringVar(&addr, "addr", "0.0.0.0:"+port, "addr to listen to")
+	flag.BoolVar(&useH2C, "h2c", h2c, "enables TLS")
+}
 
 func main() {
 	flag.Parse()
@@ -60,14 +79,6 @@ func run(log zerolog.Logger) error {
 
 	gameServer := server.New(log, playerDB)
 
-	addr := *addrFlag
-	lis, err := listen(log, addr)
-	if err != nil {
-		return err
-	}
-
-	log.Info().Str("addr", addr).Msg("starting GRPC server")
-
 	grpcLog := interceptorLogger(log)
 	grpcServer := grpc.NewServer(
 		grpc.ChainStreamInterceptor(
@@ -81,7 +92,24 @@ func run(log zerolog.Logger) error {
 	)
 	gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
 	loginsvc.RegisterLoginServiceServer(grpcServer, loginservice.New(playerDB))
-	return grpcServer.Serve(lis)
+
+	log.Info().Str("addr", addr).Msg("starting GRPC server")
+
+	if !useH2C {
+		lis, err := listen(log, addr)
+		if err != nil {
+			return err
+		}
+
+		return grpcServer.Serve(lis)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", http.HandlerFunc(grpcServer.ServeHTTP))
+	return http.ListenAndServe(
+		addr,
+		h2c.NewHandler(mux, &http2.Server{}),
+	)
 }
 
 func interceptorLogger(l zerolog.Logger) logging.Logger {
