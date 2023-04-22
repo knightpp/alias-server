@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -13,12 +14,23 @@ import (
 	"github.com/knightpp/alias-server/internal/loginservice"
 	"github.com/knightpp/alias-server/internal/server"
 	"github.com/knightpp/alias-server/internal/storage"
+	"github.com/knightpp/alias-server/internal/storage/memory"
 	"github.com/knightpp/alias-server/internal/storage/redis"
 	"github.com/rs/zerolog"
+	"golang.ngrok.com/ngrok"
+	"golang.ngrok.com/ngrok/config"
 	"google.golang.org/grpc"
 )
 
+var (
+	ngrokFlag     = flag.Bool("ngrok", false, "starts ngrok tunnel")
+	ngrokAuthFlag = flag.String("ngrok-auth", "2Omz9oTCclkfVSwCFf8GBFsDt5E_7rmnvXs7aUePuNh8pGzmc", "auth token for ngrok")
+	addrFlag      = flag.String("addr", "127.0.0.1:8080", "addrs to listen to")
+)
+
 func main() {
+	flag.Parse()
+
 	log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
 		With().
 		Timestamp().
@@ -42,15 +54,16 @@ func run(log zerolog.Logger) error {
 	} else if addr, ok := os.LookupEnv("REDIS_ADDR"); ok {
 		playerDB = redis.New(addr)
 	} else {
-		return fmt.Errorf("REDIS_ADDR must not be empty")
+		log.Warn().Msg("using inmem storage")
+		playerDB = memory.New()
 	}
 
 	gameServer := server.New(log, playerDB)
 
-	addr := fmt.Sprintf("localhost:%d", 8080)
-	lis, err := net.Listen("tcp", addr)
+	addr := *addrFlag
+	lis, err := listen(log, addr)
 	if err != nil {
-		return fmt.Errorf("listen socket: %w", err)
+		return err
 	}
 
 	log.Info().Str("addr", addr).Msg("starting GRPC server")
@@ -88,4 +101,27 @@ func interceptorLogger(l zerolog.Logger) logging.Logger {
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}
 	})
+}
+
+func listen(log zerolog.Logger, addr string) (net.Listener, error) {
+	if *ngrokFlag {
+		log.Info().Msg("using ngrok")
+		tun, err := ngrok.Listen(
+			context.Background(),
+			config.TCPEndpoint(),
+			ngrok.WithAuthtoken(*ngrokAuthFlag),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create ngrok tunnel: %w", err)
+		}
+
+		log.Info().Str("url", tun.URL()).Msg("started ngrok tunnel")
+		return tun, nil
+	} else {
+		lis, err := net.Listen("tcp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("listen socket: %w", err)
+		}
+		return lis, nil
+	}
 }
