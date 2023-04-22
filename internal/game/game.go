@@ -86,6 +86,11 @@ func (g *Game) ListRooms() []*gamesvc.Room {
 		proto := runFn1(r, func(r *entity.Room) *gamesvc.Room {
 			return r.GetProto()
 		})
+		// returns nil if room was deleted from map
+		if proto == nil {
+			continue
+		}
+
 		roomsProto = append(roomsProto, proto)
 	}
 
@@ -180,7 +185,10 @@ func runFn1[R1 any](r *entity.Room, fn func(r *entity.Room) R1) R1 {
 
 		r1 = fn(r)
 	})
-	<-wait
+	select {
+	case <-r.Ctx().Done():
+	case <-wait:
+	}
 
 	return r1
 }
