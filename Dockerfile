@@ -11,7 +11,7 @@ COPY . .
 ENV CGO_ENABLED="0"
 RUN task build
 
-FROM scratch
+FROM docker.io/alpine:3.17
 
 COPY --from=builder /src/alias-server/server /server
 
