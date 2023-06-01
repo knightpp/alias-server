@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.27.6
 	github.com/redis/go-redis/v9 v9.0.3
 	github.com/rs/zerolog v1.29.1
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.4
 	golang.ngrok.com/ngrok v1.0.0
 	golang.org/x/net v0.9.0
 	google.golang.org/grpc v1.54.0
