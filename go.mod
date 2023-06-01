@@ -9,7 +9,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/huandu/go-clone/generic v1.6.0
 	github.com/knightpp/alias-proto/go v0.0.0-20230422162712-af717cdd61ca
-	github.com/life4/genesis v1.1.0
+	github.com/life4/genesis v1.2.0
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.6
 	github.com/redis/go-redis/v9 v9.0.3
