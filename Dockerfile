@@ -1,4 +1,4 @@
-FROM docker.io/golang:1.20.3-alpine as builder
+FROM docker.io/golang:1.20.4-alpine as builder
 
 RUN go install github.com/go-task/task/v3/cmd/task@latest && \
 	go clean -modcache
