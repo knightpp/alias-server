@@ -1,12 +1,11 @@
 package entity
 
 import (
-	"context"
 	"errors"
+	"sync"
+	"time"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	"github.com/knightpp/alias-server/internal/fp"
-	"github.com/knightpp/alias-server/internal/tuple"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 	"github.com/rs/zerolog"
 )
 
@@ -25,11 +24,13 @@ type Room struct {
 	Lobby     []*Player
 	Teams     []*Team
 
-	ctx        context.Context
-	cancel     func()
-	allMsgChan chan tuple.T2[*gamesvc.Message, *Player]
-	actorChan  chan func(*Room)
-	log        zerolog.Logger
+	Mutex        sync.Mutex
+	PlayerIDTurn string
+	TurnDeadline time.Time
+	TotalStats   map[string]*gamesvc.Statistics
+	TurnStats    *gamesvc.Statistics
+
+	log zerolog.Logger
 }
 
 func NewRoom(
@@ -37,37 +38,25 @@ func NewRoom(
 	roomID, leaderID string,
 	req *gamesvc.CreateRoomRequest,
 ) *Room {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &Room{
-		ctx:        ctx,
-		cancel:     cancel,
 		log:        log.With().Str("room-id", roomID).Logger(),
-		actorChan:  make(chan func(*Room)),
-		allMsgChan: make(chan tuple.T2[*gamesvc.Message, *Player]),
-
-		Id:        roomID,
-		Name:      req.Name,
-		LeaderId:  leaderID,
-		IsPublic:  req.IsPublic,
-		Langugage: req.Langugage,
-		Password:  req.Password,
+		Id:         roomID,
+		Name:       req.Name,
+		LeaderId:   leaderID,
+		IsPublic:   req.IsPublic,
+		Langugage:  req.Langugage,
+		Password:   req.Password,
+		TotalStats: make(map[string]*gamesvc.Statistics),
+		TurnStats:  &gamesvc.Statistics{},
 	}
 }
 
-func (r *Room) Start() {
-	for {
-		select {
-		case fn := <-r.actorChan:
-			fn(r)
-
-		case <-r.ctx.Done():
-			return
-		}
+func (r *Room) Announce(ann *gamesvc.Announcement) error {
+	var errs []error
+	for _, player := range r.GetAllPlayers() {
+		errs = append(errs, player.Announce(ann))
 	}
-}
-
-func (r *Room) Cancel() {
-	r.cancel()
+	return errors.Join(errs...)
 }
 
 func (r *Room) FindTeamWithPlayer(playerID string) (*Team, bool) {
@@ -130,22 +119,6 @@ func (r *Room) GetProto() *gamesvc.Room {
 	}
 }
 
-func (r *Room) Ctx() context.Context {
-	return r.ctx
-}
-
-func (r *Room) AggregationChan() chan tuple.T2[*gamesvc.Message, *Player] {
-	return r.allMsgChan
-}
-
-// Do queues for execution. It's async method.
-func (r *Room) Do(fn func(r *Room)) {
-	select {
-	case r.actorChan <- fn:
-	case <-r.ctx.Done():
-	}
-}
-
 func (r *Room) IsEmpty() bool {
 	if len(r.Lobby) != 0 {
 		return false
@@ -179,66 +152,40 @@ func (r *Room) HasPlayer(playerID string) bool {
 	return false
 }
 
-func (r *Room) RemovePlayer(playerID string) bool {
-	oldLobbyLen := len(r.Lobby)
-	r.Lobby = fp.FilterInPlace(r.Lobby, func(p *Player) bool {
-		// TODO: potential data races if player struct accesses itself
-		return p.ID != playerID
-	})
-	newLobbyLen := len(r.Lobby)
+func (r *Room) FindPlayer(playerID string) (*Player, bool) {
+	for _, player := range r.GetAllPlayers() {
+		if player.ID == playerID {
+			return player, true
+		}
+	}
+	return nil, false
+}
 
-	var changed bool
+func (r *Room) RemovePlayer(playerID string) (*Player, bool) {
+	for i, player := range r.Lobby {
+		if player.ID == playerID {
+			// TODO: optimize by reusing the slice
+			r.Lobby = append(r.Lobby[:i], r.Lobby[i+1:]...)
+			return player, true
+		}
+	}
+
+	var player *Player
 	for _, team := range r.Teams {
 		if team.PlayerA != nil && team.PlayerA.ID == playerID {
-			changed = true
+			player = team.PlayerA
 			team.PlayerA = nil
 		}
 
 		if team.PlayerB != nil && team.PlayerB.ID == playerID {
-			changed = true
+			player = team.PlayerA
 			team.PlayerB = nil
 		}
-	}
 
-	return changed || (oldLobbyLen != newLobbyLen)
-}
-
-func (r *Room) AnnounceChange() error {
-	send := func(p *Player) error {
-		if p == nil {
-			return nil
-		}
-
-		return p.SendMsg(&gamesvc.Message{
-			Message: &gamesvc.Message_UpdateRoom{
-				UpdateRoom: &gamesvc.UpdateRoom{
-					Room:     r.GetProto(),
-					Password: r.Password,
-				},
-			},
-		})
-	}
-
-	var errs []error
-
-	for _, p := range r.Lobby {
-		err := send(p)
-		if err != nil {
-			errs = append(errs, err)
+		if player != nil {
+			return player, true
 		}
 	}
 
-	for _, team := range r.Teams {
-		err := send(team.PlayerA)
-		if err != nil {
-			errs = append(errs, err)
-		}
-
-		err = send(team.PlayerB)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	return errors.Join(errs...)
+	return nil, false
 }

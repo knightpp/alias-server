@@ -4,8 +4,7 @@ import (
 	"context"
 	"sync"
 
-	clone "github.com/huandu/go-clone/generic"
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 	"github.com/knightpp/alias-server/internal/storage"
 )
 
@@ -26,7 +25,7 @@ func (m *Memory) SetPlayer(ctx context.Context, token string, p *gamesvc.Player)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.players[token] = clone.Clone(p)
+	m.players[token] = clonePlayer(p)
 
 	return nil
 }
@@ -40,5 +39,13 @@ func (m *Memory) GetPlayer(ctx context.Context, token string) (*gamesvc.Player, 
 		return nil, storage.ErrNotFound
 	}
 
-	return clone.Clone(player), nil
+	return clonePlayer(player), nil
+}
+
+func clonePlayer(p *gamesvc.Player) *gamesvc.Player {
+	return &gamesvc.Player{
+		Id:          p.Id,
+		Name:        p.Name,
+		GravatarUrl: p.GravatarUrl,
+	}
 }

@@ -1,7 +1,7 @@
 package entity
 
 import (
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 )
 
 type Team struct {

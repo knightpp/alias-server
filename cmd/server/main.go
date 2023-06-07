@@ -10,10 +10,10 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
-	loginsvc "github.com/knightpp/alias-proto/go/login_service"
-	"github.com/knightpp/alias-server/internal/loginservice"
-	"github.com/knightpp/alias-server/internal/server"
+	accountsvc "github.com/knightpp/alias-proto/go/account/service/v1"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
+	accountserver "github.com/knightpp/alias-server/internal/accountserver"
+	server "github.com/knightpp/alias-server/internal/gameserver"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/knightpp/alias-server/internal/storage/memory"
 	"github.com/knightpp/alias-server/internal/storage/redis"
@@ -91,7 +91,7 @@ func run(log zerolog.Logger) error {
 		),
 	)
 	gamesvc.RegisterGameServiceServer(grpcServer, gameServer)
-	loginsvc.RegisterLoginServiceServer(grpcServer, loginservice.New(playerDB))
+	accountsvc.RegisterAccountServiceServer(grpcServer, accountserver.New(playerDB))
 
 	log.Info().Str("addr", addr).Msg("starting GRPC server")
 

@@ -5,69 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game/entity"
 )
-
-var _ Stater = Turn{}
-
-type Turn struct {
-	turnDeadline time.Time
-	prev         Game
-}
-
-func newTurn(deadline time.Time, prev Game) Turn {
-	return Turn{
-		turnDeadline: deadline,
-		prev:         prev,
-	}
-}
-
-func (t Turn) HandleMessage(message *gamesvc.Message, sender *entity.Player, r *entity.Room) (Stater, error) {
-	switch msg := message.Message.(type) {
-	case *gamesvc.Message_EndTurn:
-		return t.handleEndTurn(msg.EndTurn, sender, r)
-	case *gamesvc.Message_Word:
-		return t.handleWord(msg.Word, sender, r)
-	default:
-		return t, &UnknownMessageTypeError{T: message.Message}
-	}
-}
-
-func (t Turn) handleEndTurn(msg *gamesvc.MsgEndTurn, sender *entity.Player, r *entity.Room) (Stater, error) {
-	if sender.ID != t.prev.playerIDTurn {
-		return t, fmt.Errorf("only %q player can end turn", t.prev.playerIDTurn)
-	}
-
-	players := fp.FilterInPlace(r.GetAllPlayers(), func(p *entity.Player) bool {
-		return p.ID != sender.ID
-	})
-
-	err := sendMsgToPlayers(&gamesvc.Message{
-		Message: &gamesvc.Message_EndTurn{
-			EndTurn: msg,
-		},
-	}, players...)
-	if err != nil {
-		return t, err
-	}
-
-	team, ok := r.FindTeamWithPlayer(sender.ID)
-	if ok {
-		prevStats, ok := t.prev.stats[team.ID]
-		if ok {
-			prevStats.Rights += msg.Stats.Rights
-			prevStats.Wrongs += msg.Stats.Wrongs
-		} else {
-			prevStats = msg.Stats
-		}
-
-		t.prev.stats[team.ID] = prevStats
-	}
-
-	return t.prev, nil
-}
 
 func (t Turn) handleWord(msg *gamesvc.MsgWord, sender *entity.Player, r *entity.Room) (Stater, error) {
 	if t.prev.playerIDTurn != sender.ID {

@@ -57,3 +57,12 @@ func FilterInPlace[T any](slice []T, pred func(T) bool) []T {
 
 	return newSlice
 }
+
+func Find[T any](slice []T, pred func(el T) bool) (T, bool) {
+	for i := range slice {
+		if pred(slice[i]) {
+			return slice[i], true
+		}
+	}
+	return *new(T), false
+}

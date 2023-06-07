@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 	mock "github.com/stretchr/testify/mock"
 )
 

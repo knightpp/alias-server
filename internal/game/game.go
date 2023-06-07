@@ -1,39 +1,41 @@
 package game
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"time"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	"github.com/brianvoe/gofakeit/v6"
+	"github.com/google/uuid"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
+	"github.com/knightpp/alias-server/internal/fp"
 	"github.com/knightpp/alias-server/internal/game/entity"
-	"github.com/knightpp/alias-server/internal/game/statemachine"
-	"github.com/knightpp/alias-server/internal/tuple"
 	"github.com/knightpp/alias-server/internal/uuidgen"
+	"github.com/lrita/cmap"
 	"github.com/rs/zerolog"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
 	ErrRoomNoTeams        = entity.ErrStartNoTeams
 	ErrRoomIncompleteTeam = entity.ErrStartIncompleteTeam
+	ErrAlreadyInRoom      = errors.New("you must first leave the previous room to join another")
+	ErrNotJoinedRoom      = errors.New("you must first join a room")
+	ErrNotInRoom          = errors.New("you are not in room")
 	ErrRoomNotFound       = errors.New("room not found")
 	ErrPlayerInRoom       = errors.New("player already in the room")
+	ErrAlreadySubscribed  = errors.New("you are already subscribed")
 )
 
 type Game struct {
 	log zerolog.Logger
 
-	roomsMu sync.Mutex
-	rooms   map[string]*entity.Room
+	playerToRoom cmap.Map[string, string]
+	rooms        cmap.Map[string, *entity.Room]
 }
 
 func New(log zerolog.Logger) *Game {
 	return &Game{
-		log:   log,
-		rooms: make(map[string]*entity.Room),
+		log: log,
 	}
 }
 
@@ -44,151 +46,373 @@ func (g *Game) CreateRoom(
 	roomID = uuidgen.NewString()
 	r := entity.NewRoom(g.log, roomID, leader.Id, req)
 
-	go func() {
-		state := statemachine.Stater(statemachine.Lobby{})
-
-		for {
-			select {
-			case <-r.Ctx().Done():
-				return
-			case tuple := <-r.AggregationChan():
-				r.Do(func(r *entity.Room) {
-					var err error
-					state, err = state.HandleMessage(tuple.A, tuple.B, r)
-					if err != nil {
-						_ = tuple.B.SendError(err.Error())
-					}
-				})
-			}
-		}
-	}()
-	go func() {
-		r.Start()
-
-		g.roomsMu.Lock()
-		delete(g.rooms, roomID)
-		g.roomsMu.Unlock()
-	}()
-
-	g.roomsMu.Lock()
-	g.rooms[roomID] = r
-	g.roomsMu.Unlock()
+	g.rooms.Store(roomID, r)
 
 	return roomID
 }
 
 func (g *Game) ListRooms() []*gamesvc.Room {
-	g.roomsMu.Lock()
-	defer g.roomsMu.Unlock()
+	roomsProto := make([]*gamesvc.Room, 0, g.rooms.Count())
+	g.rooms.Range(func(_ string, room *entity.Room) bool {
+		room.Mutex.Lock()
+		defer room.Mutex.Unlock()
 
-	roomsProto := make([]*gamesvc.Room, 0, len(g.rooms))
-	for _, r := range g.rooms {
-		proto := runFn1(r, func(r *entity.Room) *gamesvc.Room {
-			return r.GetProto()
-		})
+		proto := room.GetProto()
 		// returns nil if room was deleted from map
 		if proto == nil {
-			continue
+			return true
 		}
 
 		roomsProto = append(roomsProto, proto)
-	}
-
+		return true
+	})
 	return roomsProto
 }
 
-func (g *Game) StartPlayerInRoom(
-	roomID string,
-	playerProto *gamesvc.Player,
-	socket gamesvc.GameService_JoinServer,
+func (g *Game) JoinRoom(
+	player *gamesvc.Player,
+	req *gamesvc.JoinRoomRequest,
+	srv gamesvc.GameService_JoinRoomServer,
 ) error {
-	g.roomsMu.Lock()
-	r, ok := g.rooms[roomID]
-	g.roomsMu.Unlock()
+	room, ok := g.rooms.Load(req.RoomId)
 	if !ok {
 		return ErrRoomNotFound
 	}
 
-	player := entity.NewPlayer(g.log, socket, playerProto, r)
+	_, loaded := g.playerToRoom.LoadOrStore(player.Id, req.RoomId)
+	if loaded {
+		return ErrAlreadyInRoom
+	}
 
-	err := runFn1(r, func(r *entity.Room) error {
-		if r.HasPlayer(player.ID) {
-			return ErrPlayerInRoom
-		}
+	room.Mutex.Lock()
 
-		r.Lobby = append(r.Lobby, player)
-		r.AnnounceChange()
-		return nil
+	if room.HasPlayer(player.Id) {
+		room.Mutex.Unlock()
+		return ErrPlayerInRoom
+	}
+
+	playerEnt := entity.NewPlayer(g.log, srv, player)
+
+	room.Lobby = append(room.Lobby, playerEnt)
+
+	err := room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_AddPlayer{
+			AddPlayer: &gamesvc.AnnAddPlayer{
+				Player: player,
+			},
+		},
 	})
 	if err != nil {
+		room.Mutex.Unlock()
 		return err
 	}
+	room.Mutex.Unlock()
 
-	ctx, cancel := context.WithCancel(r.Ctx())
+	<-playerEnt.Done()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
 
-			case msg, ok := <-player.Chan():
-				if !ok {
-					return
-				}
-
-				select {
-				case r.AggregationChan() <- tuple.NewT2(msg, player):
-					continue
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
-
-	err = player.Start(ctx)
-	cancel()
-	if err != nil {
-		if status.Code(err) != codes.Canceled {
-			g.log.
-				Err(err).
-				Stringer("status_code", status.Code(err)).
-				Interface("player", player).
-				Msg("tried to send message and something went wrong")
+	_, ok = room.RemovePlayer(player.Id)
+	if ok {
+		if room.IsEmpty() {
+			g.rooms.Delete(room.Id)
+			return nil
 		}
 
-		err = fmt.Errorf("player loop: %w", err)
+		return room.Announce(&gamesvc.Announcement{
+			Announce: &gamesvc.Announcement_RemovePlayer{
+				RemovePlayer: &gamesvc.AnnRemovePlayer{
+					PlayerId: player.Id,
+				},
+			},
+		})
 	}
 
-	r.Do(func(r *entity.Room) {
-		needsAnnounce := r.RemovePlayer(player.ID)
-
-		if r.IsEmpty() {
-			r.Cancel()
-			return
-		}
-
-		if needsAnnounce {
-			r.AnnounceChange()
-		}
-	})
-
-	return err
+	return nil
 }
 
-func runFn1[R1 any](r *entity.Room, fn func(r *entity.Room) R1) R1 {
-	var r1 R1
-	wait := make(chan struct{})
-	r.Do(func(r *entity.Room) {
-		defer close(wait)
-
-		r1 = fn(r)
-	})
-	select {
-	case <-r.Ctx().Done():
-	case <-wait:
+func (g *Game) TransferLeadership(player *gamesvc.Player, req *gamesvc.TransferLeadershipRequest) (*gamesvc.TransferLeadershipResponse, error) {
+	if player.Id == req.PlayerId {
+		return nil, errors.New("could not transfer leadership to yourself")
 	}
 
-	return r1
+	room, err := g.loadRoom(req.PlayerId)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	exists := room.HasPlayer(req.PlayerId)
+	if !exists {
+		return nil, fmt.Errorf("could not transfer leadership: no player with id=%s", req.PlayerId)
+	}
+
+	room.LeaderId = req.PlayerId
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_TransferLeadership{
+			TransferLeadership: &gamesvc.AnnTransferLeadership{
+				NewLeader: req.PlayerId,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &gamesvc.TransferLeadershipResponse{}, nil
+}
+
+func (g *Game) CreateTeam(player *gamesvc.Player, req *gamesvc.CreateTeamRequest) (*gamesvc.CreateTeamResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	team := &entity.Team{
+		ID:      uuid.NewString(),
+		Name:    req.Name,
+		PlayerA: nil,
+		PlayerB: nil,
+	}
+	if team.Name == "" {
+		team.Name = gofakeit.Vegetable()
+	}
+
+	room.Teams = append(room.Teams, team)
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_NewTeam{
+			NewTeam: &gamesvc.AnnNewTeam{
+				Team: team.ToProto(),
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &gamesvc.CreateTeamResponse{}, nil
+}
+
+// func (g *Game) UpdateTeam(player *gamesvc.Player, req *gamesvc.UpdateTeamRequest) (*gamesvc.UpdateTeamResponse, error)
+
+func (g *Game) JoinTeam(player *gamesvc.Player, req *gamesvc.JoinTeamRequest) (*gamesvc.JoinTeamResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	team, ok := fp.Find(room.Teams, func(t *entity.Team) bool {
+		return t.ID == req.TeamId
+	})
+	if !ok {
+		return nil, fmt.Errorf("TODO: team not found")
+	}
+
+	removedPlayer, ok := room.RemovePlayer(player.Id)
+	if !ok {
+		return nil, errors.New("player not found")
+	}
+
+	if team.PlayerA != nil && team.PlayerB != nil {
+		return nil, errors.New("team is full")
+	}
+
+	var slot gamesvc.Slot
+	switch {
+	case team.PlayerA == nil:
+		team.PlayerA = removedPlayer
+		slot = gamesvc.Slot_SLOT_A
+	case team.PlayerB == nil:
+		team.PlayerB = removedPlayer
+		slot = gamesvc.Slot_SLOT_B
+	default:
+		return nil, fmt.Errorf("TODO: team is full")
+	}
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_JoinTeam{
+			JoinTeam: &gamesvc.AnnJoinTeam{
+				PlayerId: player.Id,
+				TeamId:   team.ID,
+				Slot:     slot,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &gamesvc.JoinTeamResponse{}, nil
+}
+
+func (g *Game) StartGame(player *gamesvc.Player, req *gamesvc.StartGameRequest) (*gamesvc.StartGameResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	if room.LeaderId != player.Id {
+		return nil, errors.New("only leader id can start game")
+	}
+
+	if len(room.Teams) == 0 {
+		return nil, entity.ErrStartNoTeams
+	}
+
+	playerIDTurn := req.NextPlayerTurn
+	if playerIDTurn == "" {
+		return nil, fmt.Errorf("next player turn should not be empty")
+	}
+
+	for _, team := range room.Teams {
+		if team.PlayerA == nil || team.PlayerB == nil {
+			return nil, entity.ErrStartIncompleteTeam
+		}
+	}
+
+	ok := room.HasPlayer(playerIDTurn)
+	if !ok {
+		return nil, fmt.Errorf("cannot start game: no player with %q id", playerIDTurn)
+	}
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_StartGame{
+			StartGame: &gamesvc.AnnStartGame{
+				PlayerTurn: playerIDTurn,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &gamesvc.StartGameResponse{}, nil
+}
+
+func (g *Game) StopGame(player *gamesvc.Player, req *gamesvc.StopGameRequest) (*gamesvc.StopGameResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	if room.LeaderId != player.Id {
+		return nil, errors.New("only leader can end game")
+	}
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_EndGame{
+			EndGame: &gamesvc.AnnEndGame{
+				TeamIdToStats: room.TotalStats,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &gamesvc.StopGameResponse{}, nil
+}
+
+func (g *Game) StartTurn(player *gamesvc.Player, req *gamesvc.StartTurnRequest) (*gamesvc.StartTurnResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	if player.Id != room.PlayerIDTurn {
+		return nil, fmt.Errorf("only player with %s id can start next turn", room.PlayerIDTurn)
+	}
+	if req.DurationMs == 0 {
+		return nil, errors.New("could not start turn with 0 duration")
+	}
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_StartTurn{
+			StartTurn: &gamesvc.AnnStartTurn{
+				DurationMs: req.DurationMs,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	room.TurnDeadline = time.Now().Add(time.Duration(req.DurationMs) * time.Millisecond)
+	return &gamesvc.StartTurnResponse{}, nil
+}
+
+func (g *Game) StopTurn(player *gamesvc.Player, req *gamesvc.StopTurnRequest) (*gamesvc.StopTurnResponse, error) {
+	room, err := g.loadRoom(player.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	if player.Id != room.PlayerIDTurn {
+		return nil, fmt.Errorf("only %q player can end turn", room.PlayerIDTurn)
+	}
+
+	err = room.Announce(&gamesvc.Announcement{
+		Announce: &gamesvc.Announcement_EndTurn{
+			EndTurn: &gamesvc.AnnEndTurn{
+				Stats: room.TurnStats,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	team, ok := room.FindTeamWithPlayer(player.Id)
+	if ok {
+		prevStats, ok := room.TotalStats[team.ID]
+		if ok {
+			prevStats.Rights += room.TurnStats.Rights
+			prevStats.Wrongs += room.TurnStats.Wrongs
+		} else {
+			prevStats = room.TurnStats
+		}
+
+		room.TotalStats[team.ID] = prevStats
+	}
+
+	return &gamesvc.StopTurnResponse{}, nil
+}
+
+// func (g *Game) Score(player *gamesvc.Player, req *gamesvc.ScoreRequest) (*gamesvc.ScoreResponse, error)
+
+// loadRoom returns room in which player are in.
+func (g *Game) loadRoom(playerID string) (*entity.Room, error) {
+	roomID, ok := g.playerToRoom.Load(playerID)
+	if !ok {
+		return nil, ErrNotJoinedRoom
+	}
+
+	room, ok := g.rooms.Load(roomID)
+	if !ok {
+		return nil, ErrRoomNotFound
+	}
+
+	return room, nil
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 	"github.com/knightpp/alias-server/internal/storage"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"

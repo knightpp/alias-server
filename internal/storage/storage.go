@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	gamesvc "github.com/knightpp/alias-proto/go/game_service"
+	gamesvc "github.com/knightpp/alias-proto/go/game/service/v1"
 )
 
 var ErrNotFound = errors.New("player not found")
